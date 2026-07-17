@@ -1,4 +1,4 @@
-package com.example.menusayac
+package com.suretakip.app
 
 import io.flutter.embedding.android.FlutterActivity
 

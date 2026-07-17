@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:menusayac/app/providers/app_providers.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});

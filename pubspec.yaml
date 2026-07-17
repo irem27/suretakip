@@ -1,4 +1,4 @@
-name: menusayac
+name: suretakip
 description: "Dakika bazlı işletme takip ve ücret hesaplama uygulaması."
 publish_to: 'none'
 version: 1.0.0+1
@@ -10,7 +10,6 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-  flutter_dotenv: ^5.2.1
   flutter_riverpod: ^2.6.1
   freezed_annotation: ^2.4.4
   go_router: ^16.0.0
@@ -29,5 +28,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - .env

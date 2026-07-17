@@ -1,18 +1,24 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:menusayac/core/constants/app_constants.dart';
+import 'package:suretakip/core/constants/app_constants.dart';
 
 class SupabaseInitializer {
+  // Derleme zamanı sabitleri: `--dart-define` / `--dart-define-from-file` ile verilir.
+  static const _supabaseUrl = String.fromEnvironment(
+    AppConstants.supabaseUrlEnvKey,
+  );
+  static const _supabaseAnonKey = String.fromEnvironment(
+    AppConstants.supabaseAnonKeyEnvKey,
+  );
+
   static Future<void> initialize() async {
-    final supabaseUrl =
-        dotenv.env[AppConstants.supabaseUrlEnvKey]?.trim() ?? '';
-    final supabaseAnonKey =
-        dotenv.env[AppConstants.supabaseAnonKeyEnvKey]?.trim() ?? '';
+    final supabaseUrl = _supabaseUrl.trim();
+    final supabaseAnonKey = _supabaseAnonKey.trim();
 
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
       throw StateError(
-        'SUPABASE_URL ve SUPABASE_ANON_KEY değerleri .env dosyasında tanımlı olmalı.',
+        'SUPABASE_URL ve SUPABASE_ANON_KEY tanımlı değil. '
+        'Uygulamayı `--dart-define-from-file=.env` ile çalıştırın (bkz. README).',
       );
     }
 

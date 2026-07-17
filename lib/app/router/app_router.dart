@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:menusayac/features/auth/presentation/pages/login_page.dart';
-import 'package:menusayac/features/dashboard/presentation/pages/dashboard_page.dart';
-import 'package:menusayac/app/providers/app_providers.dart';
-import 'package:menusayac/app/router/app_routes.dart';
+import 'package:suretakip/features/auth/presentation/pages/login_page.dart';
+import 'package:suretakip/features/dashboard/presentation/pages/dashboard_page.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/app/router/app_routes.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   ref.watch(authStateProvider);

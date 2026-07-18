@@ -1,4 +1,5 @@
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
+import 'package:suretakip/features/sessions/domain/entities/session_history_filter.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_item.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_time_entry.dart';
 
@@ -10,15 +11,14 @@ abstract interface class SessionsRepository {
 
   Future<Session> getSession(String sessionId);
 
+  Future<List<Session>> getSessionHistory({
+    required String businessId,
+    required SessionHistoryFilter filter,
+  });
+
   Future<List<SessionItem>> getSessionItems(String sessionId);
 
   Future<List<SessionTimeEntry>> getSessionTimeEntries(String sessionId);
-
-  Future<Session> updateSessionDetails({
-    required String sessionId,
-    String? customerId,
-    String? notes,
-  });
 
   Future<String> startSession({
     required String businessId,
@@ -46,4 +46,8 @@ abstract interface class SessionsRepository {
   });
 
   Future<String> cancelSession({required String sessionId});
+
+  /// Sunucunun o anki zamanı (UTC). Canlı sayacı cihaz saatinden bağımsız
+  /// kılmak için fetch anında çapa olarak alınır.
+  Future<DateTime> serverNow();
 }

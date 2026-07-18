@@ -103,9 +103,14 @@ psql "$(supabase status -o env | grep DB_URL | cut -d= -f2-)" -f supabase/tests/
 ## Kalite kontrolleri
 
 ```bash
-flutter analyze     # sıfır uyarı
-flutter test        # hepsi yeşil
+dart format --output=none --set-exit-if-changed .
+flutter analyze --fatal-infos   # sıfır uyarı
+flutter test --coverage         # hepsi yeşil
 ```
+
+Güncel durum: `flutter analyze` temiz, Flutter test paketi yeşil ve satır
+kapsamı **%69,9** (CI alt sınırı %65, hedef %80). Supabase RLS/RPC senaryo
+paketi **51/51** geçiyor.
 
 ## Proje yapısı
 
@@ -132,23 +137,31 @@ bakın.
 
 - `dart format --set-exit-if-changed` (biçim)
 - `flutter analyze --fatal-infos` (statik analiz)
-- `flutter test --coverage` + **kapsam alt sınırı** (`MIN_COVERAGE`, şu an %52)
+- `flutter test --coverage` + **kapsam alt sınırı** (`MIN_COVERAGE`, şu an %65)
 - `supabase db reset` (tüm migration'lar temiz uygulanır)
 - **`supabase/tests/rls_test.sql`** — tenant izolasyonu, rol matrisi, seans
-  durum makinesi, stok ledger'ı, onboarding atomikliği ve rapor aggregate'leri
+  durum makinesi, stok ledger'ı, onboarding atomikliği, üyelik invariantları
+  ve rapor aggregate'leri (51 senaryo)
 
 > Kapsam kapısı bir *ratchet*'tir: hedef **%80**. Kapsam arttıkça
-> `MIN_COVERAGE` yükseltilmelidir (bugün: %56,7).
+> `MIN_COVERAGE` yükseltilmelidir (bugünkü ölçüm: %69,9).
 
 ## Yayın öncesi (Faz 8)
 
 Tek sayfalık süreç için
 [`docs/release-checklist.md`](docs/release-checklist.md) dosyasını kullanın.
 
-- [ ] **Android release imzalama** — `android/app/build.gradle.kts` hâlâ debug
-      key ile imzalıyor. **Yayın engelleyicisi**: bu haliyle Play Store'a çıkılamaz.
+- [ ] **Android release imzalama anahtarı** — build artık debug key'e **geri
+      düşmüyor**: imzalama yapılandırması yoksa çıktı İMZASIZ üretilir ve
+      derleme sırasında görünür bir uyarı basılır (`android/app/build.gradle.kts`).
+      Mağazaya çıkmadan önce gerçek keystore sağlanmalıdır
+      (`ANDROID_KEYSTORE_PATH` / `android/key.properties`).
 - [ ] Test kapsamını %80'e çıkar (açık: data katmanının kalanı, ekran testleri)
-- [ ] Rol farkındalıklı UI (staff'a owner/admin aksiyonları gösterilmemeli)
+- [ ] Üye daveti ve üyelik yönetimi ekranları — sunucu tarafı RPC'ler hazır
+      (`add_business_member`, `update_business_member_role`,
+      `set_business_member_active`, `transfer_business_ownership`); açık olan
+      davet akışının ürün kararıdır, bkz.
+      [`docs/adr/0001-member-invitations.md`](docs/adr/0001-member-invitations.md)
 - [ ] Şifre sıfırlama deep link (`redirectTo` + app link) ve yeni şifre ekranı
 - [ ] Uygulama ikonları ve splash
 - [ ] Store metaverileri

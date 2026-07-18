@@ -39,12 +39,15 @@ jobs:
       # Kapsam kapısı bir "ratchet"tir: hedef %80, ama bugünkü seviyenin
       # altına düşmeyi engeller. Kapsam arttıkça MIN_COVERAGE yükseltilmeli.
       #
-      # 2026-07-18: Eşik 52'den 45'e YENİDEN TABANLANDI — bu bir gevşetme değil,
+      # 2026-07-18 (1): Eşik bir ara 45'e YENİDEN TABANLANDI — gevşetme değil,
       # ölçüm tabanı değişti. Router testi app_router.dart üzerinden tüm sayfaları
       # transitif olarak import edince, daha önce lcov'da hiç görünmeyen ~950 satır
       # test edilmemiş UI kodu ölçüme dahil oldu (paydada 3274 -> 4230).
       # Kapsanan satır AZALMADI, arttı (1904 -> 2030); yalnızca oran dürüstleşti.
-      # Eski %58.2 ile yeni %48.0 aynı şeyi ölçmüyor.
+      #
+      # 2026-07-18 (2): Test paketi genişletildikten sonra eşik 65'e YÜKSELTİLDİ.
+      # Güncel ölçüm %69,9 (2979/4259 satır). Aşağıdaki MIN_COVERAGE bu commit'teki
+      # gerçek değerdir; yukarıdaki 45/52 rakamları yalnızca tarihsel kayıttır.
       - name: Enforce coverage floor
         env:
           MIN_COVERAGE: "65"

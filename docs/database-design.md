@@ -44,7 +44,8 @@ erDiagram
 
 | Fonksiyon | Ne yapar | Kritik guard |
 |-----------|----------|--------------|
-| `create_business_with_owner(name, currency, tz)` | İşletme + owner üyeliği (tek tx) | Sahipsiz işletme imkansız |
+| ~~`create_business_with_owner(name, currency, tz)`~~ **KALDIRILDI** *(20260718090100)* | — | Hizmetsiz işletme üretebiliyordu: kullanıcı onboarding'i atlayıp bu RPC'yi çağırınca `start_session` imkansız hale gelen kilitli bir hesapla kalıyordu. Yerine `complete_onboarding` |
+| `add_business_member` / `update_business_member_role` / `set_business_member_active` / `remove_business_member` / `transfer_business_ownership` *(eklendi: 2026-07-18)* | Üyelik mutasyonlarının tek yolu | `business_members`'a doğrudan insert/update/delete grant'i YOK. Her çağrıda çağıranın rolü sunucuda doğrulanır; admin owner satırına dokunamaz ve kimseyi owner yapamaz; **son aktif owner silinemez/pasifleştirilemez/rolü düşürülemez**. Eşzamanlılık `businesses` satırı `FOR UPDATE` ile serileştirilir |
 | `complete_onboarding(...)` *(eklendi: 2026-07-17)* | İşletme + owner + zorunlu ilk hizmet + opsiyonel ürün (tek tx) | Hizmetsiz işletme imkansız; herhangi bir adım başarısızsa hepsi rollback. Uygulama onboarding'de bunu kullanır |
 | `create_product_with_stock(...)` *(eklendi: 2026-07-17)* | Ürün + varsa ilk stok (tek tx) | İlk stok cache'e değil `inventory_movements`'a `initial` olarak yazılır; cache'i trigger günceller. owner/admin yetkisi. Ürün CRUD create'i bunu kullanır — stok cache'i asla doğrudan yazılmaz |
 | `report_revenue_summary` / `report_top_services` / `report_top_products` / `report_top_customers` / `dashboard_metrics` *(eklendi: 2026-07-17)* | Raporlar SUNUCU TARAFINDA aggregate edilir | İşletme saat dilimine göre dönemler (DST dahil), yalnız `completed` seanslar gelire girer, tüm tutarlar minor bigint, `is_business_member` kontrolü. **Uygulama raporları/dashboard'u bu RPC'lerden okur — client'ta toplama yapmaz** (kesme/eksik gelir yok) |
@@ -58,7 +59,11 @@ erDiagram
 ## 4. Örnek Kullanım
 
 ```sql
-select create_business_with_owner('Berber Ali', 'TRY', 'Europe/Istanbul');  -- → business_id
+-- Onboarding'in tek kapısı (işletme + owner + ZORUNLU ilk hizmet, tek tx):
+select complete_onboarding(
+  'Berber Ali', 'TRY', 'Europe/Istanbul',
+  'Koltuk', 250, 15, 10                                                     -- → business_id
+);
 select start_session(:business_id, :service_id);                            -- misafir seans
 select start_session(:business_id, :service_id, :customer_id, 'VIP');
 select pause_session(:session_id);
@@ -72,9 +77,16 @@ select coalesce(sum(extract(epoch from coalesce(ended_at, now()) - started_at)),
 from session_time_entries
 where session_id = :session_id and entry_type = 'active';
 
--- Elle stok girişi (yalnız owner/admin):
+-- Elle stok girişi (yalnız owner/admin). Stok DAİMA ledger üzerinden girilir;
+-- products.stock_quantity'ye doğrudan UPDATE yetkisi yoktur (20260718090000).
 insert into inventory_movements (business_id, product_id, movement_type, quantity_delta, note)
 values (:business_id, :product_id, 'restock', 24, 'yeni koli');
+
+-- Üyelik yönetimi (doğrudan tablo yazma yetkisi yok):
+select add_business_member(:business_id, :user_id, 'staff');
+select update_business_member_role(:member_id, 'admin');
+select set_business_member_active(:member_id, false);
+select transfer_business_ownership(:business_id, :to_member_id);
 ```
 
 ## 5. Kritik Edge Case'ler
@@ -97,4 +109,4 @@ values (:business_id, :product_id, 'restock', 24, 'yeni koli');
 
 ## 7. Test Paketi
 
-`supabase/tests/rls_test.sql` — 20 senaryo: tenant izolasyonu, rol matrisi, RPC durum makinesi, stok ledger/cache tutarlılığı, snapshot bağımsızlığı, constraint'ler. Çalıştırma komutu dosyanın başında. Eşzamanlılık senaryosu (iki paralel bağlantı) tek transaction'lık psql testinde birebir simüle edilemez; garanti `FOR UPDATE` + check constraint katmanlarındadır (Edge Case 1).
+`supabase/tests/rls_test.sql` — **51 senaryo**: tenant izolasyonu, rol matrisi, RPC durum makinesi, stok ledger/cache tutarlılığı, snapshot bağımsızlığı, constraint'ler ve 2026-07-18 güvenlik sıkılaştırmasının pozitif/negatif testleri (29-51: doğrudan `stock_quantity` yazma reddi, kaldırılan onboarding RPC'si, son owner invariantı, admin yetki yükseltme koruması, tenant sınırı, atomik sahiplik devri). Çalıştırma komutu dosyanın başında. Eşzamanlılık senaryosu (iki paralel bağlantı) tek transaction'lık psql testinde birebir simüle edilemez; garanti `FOR UPDATE` + check constraint katmanlarındadır (Edge Case 1).

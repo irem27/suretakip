@@ -1,5 +1,6 @@
 import 'package:suretakip/features/products/domain/entities/inventory_movement.dart';
 import 'package:suretakip/features/products/domain/entities/product.dart';
+import 'package:suretakip/features/products/domain/entities/product_input.dart';
 
 abstract interface class ProductsRepository {
   Future<List<Product>> getProducts({
@@ -9,9 +10,11 @@ abstract interface class ProductsRepository {
 
   Future<Product> getProduct(String productId);
 
-  Future<Product> createProduct(Product product);
+  Future<Product> createProduct(ProductInput input);
 
   Future<Product> updateProduct(Product product);
+
+  Future<Product> setProductActive(String productId, {required bool isActive});
 
   Future<List<InventoryMovement>> getInventoryMovements({
     required String businessId,

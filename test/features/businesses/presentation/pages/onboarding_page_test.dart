@@ -60,10 +60,25 @@ class _FakeBusinessesRepository implements BusinessesRepository {
   }) async => _member(businessId: businessId, userId: userId, role: role);
 
   @override
-  Future<BusinessMember> updateMember(BusinessMember member) async => member;
+  Future<BusinessMember> changeMemberRole({
+    required String memberId,
+    required MemberRole role,
+  }) async => _member(role: role);
 
   @override
-  Future<BusinessMember> deactivateMember(String memberId) async => _member();
+  Future<BusinessMember> setMemberActive({
+    required String memberId,
+    required bool isActive,
+  }) async => _member();
+
+  @override
+  Future<void> removeMember(String memberId) async {}
+
+  @override
+  Future<void> transferOwnership({
+    required String businessId,
+    required String toMemberId,
+  }) async {}
 }
 
 Business _business() => Business(

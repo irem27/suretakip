@@ -44,6 +44,15 @@ class AppConstants {
   static const reportTopCustomersRpc = 'report_top_customers';
   static const dashboardMetricsRpc = 'dashboard_metrics';
 
+  /// Üyelik mutasyonları yalnızca bu RPC'lerle yapılır; business_members
+  /// tablosuna doğrudan insert/update/delete yetkisi kaldırılmıştır
+  /// (20260718090200). Son owner invariantı sunucu tarafında uygulanır.
+  static const addBusinessMemberRpc = 'add_business_member';
+  static const updateBusinessMemberRoleRpc = 'update_business_member_role';
+  static const setBusinessMemberActiveRpc = 'set_business_member_active';
+  static const removeBusinessMemberRpc = 'remove_business_member';
+  static const transferBusinessOwnershipRpc = 'transfer_business_ownership';
+
   static const supportedCurrencyCodes = <String>['TRY', 'USD', 'EUR', 'GBP'];
   static const supportedTimezones = <String>[
     'Europe/Istanbul',

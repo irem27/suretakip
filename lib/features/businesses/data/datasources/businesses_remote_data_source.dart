@@ -46,17 +46,42 @@ class BusinessesRemoteDataSource {
     return rows;
   }
 
-  Future<Map<String, dynamic>> addMember(Map<String, Object?> values) => _client
+  Future<Map<String, dynamic>> getMember(String memberId) => _client
       .from(AppConstants.businessMembersTable)
-      .insert(values)
       .select()
+      .eq('id', memberId)
       .single();
 
-  Future<Map<String, dynamic>> updateMember(Map<String, Object?> values) =>
-      _client
-          .from(AppConstants.businessMembersTable)
-          .update(values)
-          .eq('id', values['id']! as String)
-          .select()
-          .single();
+  // ---------------------------------------------------------------
+  // Üyelik mutasyonları
+  //
+  // business_members tablosuna doğrudan insert/update/delete yetkisi
+  // 20260718090200 ile kaldırıldı. Sebep: owner kendi satırını silerek /
+  // pasifleştirerek / rolünü düşürerek işletmeyi SIFIR aktif owner ile
+  // bırakabiliyordu (kalıcı kilitlenme). Yetki kontrolü ve son owner
+  // invariantı artık sunucuda, kilit altında uygulanır.
+  //
+  // RPC'ler void/uuid döndürdüğü için mutasyon sonrası güncel satır
+  // getMember ile okunur; istemci hiçbir alanı kendi tahmin etmez.
+  // ---------------------------------------------------------------
+
+  Future<String> addMember(Map<String, Object?> params) async {
+    final result = await _client.rpc(
+      AppConstants.addBusinessMemberRpc,
+      params: params,
+    );
+    return result as String;
+  }
+
+  Future<void> updateMemberRole(Map<String, Object?> params) =>
+      _client.rpc(AppConstants.updateBusinessMemberRoleRpc, params: params);
+
+  Future<void> setMemberActive(Map<String, Object?> params) =>
+      _client.rpc(AppConstants.setBusinessMemberActiveRpc, params: params);
+
+  Future<void> removeMember(Map<String, Object?> params) =>
+      _client.rpc(AppConstants.removeBusinessMemberRpc, params: params);
+
+  Future<void> transferOwnership(Map<String, Object?> params) =>
+      _client.rpc(AppConstants.transferBusinessOwnershipRpc, params: params);
 }

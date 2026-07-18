@@ -4,7 +4,6 @@ import 'package:suretakip/core/value_objects/money.dart';
 import 'package:suretakip/features/businesses/data/datasources/businesses_remote_data_source.dart';
 import 'package:suretakip/features/businesses/data/repositories/businesses_repository_impl.dart';
 import 'package:suretakip/features/businesses/domain/entities/business.dart';
-import 'package:suretakip/features/businesses/domain/entities/business_member.dart';
 import 'package:suretakip/features/businesses/domain/entities/onboarding_input.dart';
 
 void main() {
@@ -94,7 +93,7 @@ void main() {
     );
   });
 
-  test('üyeleri eşler ve rol güncellemelerini datasourcea iletir', () async {
+  test('üyeleri eşler ve üye ekleme RPC parametrelerini iletir', () async {
     final dataSource = _FakeBusinessesDataSource();
     final repository = BusinessesRepositoryImpl(dataSource);
 
@@ -104,19 +103,65 @@ void main() {
       userId: 'user-2',
       role: MemberRole.staff,
     );
-    await repository.updateMember(_memberEntity(isActive: false));
-    await repository.deactivateMember('member-1');
 
     expect(members.single.role, MemberRole.owner);
     expect(added.businessId, 'business-1');
     expect(dataSource.requestedMembersBusinessId, 'business-1');
-    expect(dataSource.addMemberValues?['user_id'], 'user-2');
-    expect(dataSource.addMemberValues?['role'], 'staff');
-    expect(dataSource.updateMemberCalls[0]['role'], 'owner');
-    expect(dataSource.updateMemberCalls[0]['is_active'], isFalse);
-    expect(dataSource.updateMemberCalls[1], {
-      'id': 'member-1',
-      'is_active': false,
+    // Doğrudan tablo insert'i değil, add_business_member RPC parametreleri.
+    expect(dataSource.addMemberParams, {
+      'p_business_id': 'business-1',
+      'p_user_id': 'user-2',
+      'p_role': 'staff',
+    });
+  });
+
+  test('rol ve aktiflik mutasyonları RPC üzerinden yürür', () async {
+    final dataSource = _FakeBusinessesDataSource();
+    final repository = BusinessesRepositoryImpl(dataSource);
+
+    await repository.changeMemberRole(
+      memberId: 'member-1',
+      role: MemberRole.admin,
+    );
+    await repository.setMemberActive(memberId: 'member-1', isActive: false);
+
+    expect(dataSource.updateRoleParams, {
+      'p_member_id': 'member-1',
+      'p_role': 'admin',
+    });
+    expect(dataSource.setActiveParams, {
+      'p_member_id': 'member-1',
+      'p_is_active': false,
+    });
+  });
+
+  test('mutasyon sonrası güncel üye satırı sunucudan okunur', () async {
+    final dataSource = _FakeBusinessesDataSource();
+    final repository = BusinessesRepositoryImpl(dataSource);
+
+    await repository.changeMemberRole(
+      memberId: 'member-1',
+      role: MemberRole.admin,
+    );
+
+    // RPC void döner; istemci rolü kendi tahmin etmez, satırı yeniden okur.
+    expect(dataSource.readMemberIds, ['member-1']);
+  });
+
+  test('üye silme ve sahiplik devri RPC parametrelerini iletir', () async {
+    final dataSource = _FakeBusinessesDataSource();
+    final repository = BusinessesRepositoryImpl(dataSource);
+
+    await repository.removeMember('member-9');
+    await repository.transferOwnership(
+      businessId: 'business-1',
+      toMemberId: 'member-2',
+    );
+
+    expect(dataSource.removeParams, {'p_member_id': 'member-9'});
+    expect(dataSource.transferParams, {
+      'p_business_id': 'business-1',
+      'p_to_member_id': 'member-2',
     });
   });
 }
@@ -130,8 +175,12 @@ class _FakeBusinessesDataSource implements BusinessesRemoteDataSource {
   String? requestedBusinessId;
   String? requestedMembersBusinessId;
   Map<String, Object?>? businessValues;
-  Map<String, Object?>? addMemberValues;
-  final List<Map<String, Object?>> updateMemberCalls = [];
+  Map<String, Object?>? addMemberParams;
+  Map<String, Object?>? updateRoleParams;
+  Map<String, Object?>? setActiveParams;
+  Map<String, Object?>? removeParams;
+  Map<String, Object?>? transferParams;
+  final List<String> readMemberIds = [];
 
   @override
   Future<List<Map<String, dynamic>>> getBusinesses() async => [businessRow];
@@ -163,15 +212,35 @@ class _FakeBusinessesDataSource implements BusinessesRemoteDataSource {
   }
 
   @override
-  Future<Map<String, dynamic>> addMember(Map<String, Object?> values) async {
-    addMemberValues = values;
-    return {..._memberRow, 'user_id': values['user_id']};
+  Future<Map<String, dynamic>> getMember(String memberId) async {
+    readMemberIds.add(memberId);
+    return _memberRow;
   }
 
   @override
-  Future<Map<String, dynamic>> updateMember(Map<String, Object?> values) async {
-    updateMemberCalls.add(values);
-    return _memberRow;
+  Future<String> addMember(Map<String, Object?> params) async {
+    addMemberParams = params;
+    return 'member-1';
+  }
+
+  @override
+  Future<void> updateMemberRole(Map<String, Object?> params) async {
+    updateRoleParams = params;
+  }
+
+  @override
+  Future<void> setMemberActive(Map<String, Object?> params) async {
+    setActiveParams = params;
+  }
+
+  @override
+  Future<void> removeMember(Map<String, Object?> params) async {
+    removeParams = params;
+  }
+
+  @override
+  Future<void> transferOwnership(Map<String, Object?> params) async {
+    transferParams = params;
   }
 }
 
@@ -186,16 +255,6 @@ Business _businessEntity({required bool isActive, DateTime? archivedAt}) =>
       createdAt: DateTime.utc(2026),
       updatedAt: DateTime.utc(2026, 7, 18),
     );
-
-BusinessMember _memberEntity({required bool isActive}) => BusinessMember(
-  id: 'member-1',
-  businessId: 'business-1',
-  userId: 'user-1',
-  role: MemberRole.owner,
-  isActive: isActive,
-  createdAt: DateTime.utc(2026),
-  updatedAt: DateTime.utc(2026, 7, 18),
-);
 
 final _businessRow = <String, dynamic>{
   'id': 'business-1',

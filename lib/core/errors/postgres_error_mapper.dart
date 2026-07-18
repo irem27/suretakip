@@ -191,6 +191,57 @@ abstract final class PostgresErrorMapper {
           code: key,
           cause: cause,
         ),
+        // ---- Üyelik yönetimi (20260718090200) ----
+        'last_owner_protected' => ConflictException(
+          'İşletmede en az bir aktif sahip kalmalıdır. Önce sahipliği '
+          'başka bir üyeye devredin.',
+          code: key,
+          cause: cause,
+        ),
+        'member_not_found' => NotFoundException(
+          'Üye kaydı bulunamadı.',
+          code: key,
+          cause: cause,
+        ),
+        'member_already_exists' => ConflictException(
+          'Bu kullanıcı zaten işletmenin üyesi. Pasif üyeyi yeniden '
+          'aktifleştirebilirsiniz.',
+          code: key,
+          cause: cause,
+        ),
+        'member_has_history' => ConflictException(
+          'Bu üyenin işlem geçmişi olduğu için silinemez. Bunun yerine '
+          'pasifleştirin.',
+          code: key,
+          cause: cause,
+        ),
+        'target_member_inactive' => ConflictException(
+          'Sahiplik yalnızca aktif bir üyeye devredilebilir.',
+          code: key,
+          cause: cause,
+        ),
+        'cannot_transfer_to_self' => ValidationException(
+          'Sahipliği kendinize devredemezsiniz.',
+          code: key,
+          cause: cause,
+        ),
+        'user_not_found' => NotFoundException(
+          'Kullanıcı bulunamadı.',
+          code: key,
+          cause: cause,
+        ),
+        'user_id_required' => ValidationException(
+          'Kullanıcı seçilmeden üye eklenemez.',
+          code: key,
+          cause: cause,
+        ),
+        // Savunma amaçlı: bu hatanın istemciye ulaşması, stok cache'ine
+        // ledger dışından yazma denendiği anlamına gelir (20260718090000).
+        'stock_quantity_direct_write_denied' => AuthorizationException(
+          'Stok yalnızca stok hareketleriyle değiştirilebilir.',
+          code: key,
+          cause: cause,
+        ),
         _ => null,
       };
 
@@ -200,12 +251,17 @@ abstract final class PostgresErrorMapper {
     'service_name_required',
     'product_name_required',
     'business_not_active',
+    'cannot_transfer_to_self',
     'currency_mismatch',
     'customer_not_found',
     'insufficient_stock',
     'invalid_amount',
     'invalid_discount',
     'invalid_quantity',
+    'last_owner_protected',
+    'member_already_exists',
+    'member_has_history',
+    'member_not_found',
     'not_a_member',
     'not_authorized',
     'product_not_available',
@@ -215,5 +271,9 @@ abstract final class PostgresErrorMapper {
     'session_not_found',
     'session_not_open',
     'session_not_paused',
+    'stock_quantity_direct_write_denied',
+    'target_member_inactive',
+    'user_id_required',
+    'user_not_found',
   };
 }

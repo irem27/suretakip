@@ -72,33 +72,58 @@ class BusinessesRepositoryImpl implements BusinessesRepository {
     required String businessId,
     required String userId,
     MemberRole role = MemberRole.staff,
+  }) => _guard(() async {
+    final memberId = await _dataSource.addMember({
+      'p_business_id': businessId,
+      'p_user_id': userId,
+      'p_role': role.name,
+    });
+    return _readMember(memberId);
+  });
+
+  @override
+  Future<BusinessMember> changeMemberRole({
+    required String memberId,
+    required MemberRole role,
+  }) => _guard(() async {
+    await _dataSource.updateMemberRole({
+      'p_member_id': memberId,
+      'p_role': role.name,
+    });
+    return _readMember(memberId);
+  });
+
+  @override
+  Future<BusinessMember> setMemberActive({
+    required String memberId,
+    required bool isActive,
+  }) => _guard(() async {
+    await _dataSource.setMemberActive({
+      'p_member_id': memberId,
+      'p_is_active': isActive,
+    });
+    return _readMember(memberId);
+  });
+
+  @override
+  Future<void> removeMember(String memberId) =>
+      _guard(() => _dataSource.removeMember({'p_member_id': memberId}));
+
+  @override
+  Future<void> transferOwnership({
+    required String businessId,
+    required String toMemberId,
   }) => _guard(
-    () async => _memberFromJson(
-      await _dataSource.addMember({
-        'business_id': businessId,
-        'user_id': userId,
-        'role': role.name,
-      }),
-    ),
+    () => _dataSource.transferOwnership({
+      'p_business_id': businessId,
+      'p_to_member_id': toMemberId,
+    }),
   );
 
-  @override
-  Future<BusinessMember> updateMember(BusinessMember member) => _guard(
-    () async => _memberFromJson(
-      await _dataSource.updateMember({
-        'id': member.id,
-        'role': member.role.name,
-        'is_active': member.isActive,
-      }),
-    ),
-  );
-
-  @override
-  Future<BusinessMember> deactivateMember(String memberId) => _guard(
-    () async => _memberFromJson(
-      await _dataSource.updateMember({'id': memberId, 'is_active': false}),
-    ),
-  );
+  /// Mutasyon RPC'leri void/uuid döndürür. Güncel satırı sunucudan okuyoruz;
+  /// istemci hiçbir alanı (özellikle rol ve is_active) kendi tahmin etmez.
+  Future<BusinessMember> _readMember(String memberId) async =>
+      _memberFromJson(await _dataSource.getMember(memberId));
 
   Business _businessFromJson(Map<String, dynamic> json) => Business(
     id: json['id'] as String,

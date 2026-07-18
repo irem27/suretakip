@@ -10,21 +10,34 @@ insert into auth.users (instance_id, id, aud, role, email)
 values
   ('00000000-0000-0000-0000-000000000000','11111111-1111-1111-1111-111111111111','authenticated','authenticated','owner@test.local'),
   ('00000000-0000-0000-0000-000000000000','22222222-2222-2222-2222-222222222222','authenticated','authenticated','rakip@test.local'),
-  ('00000000-0000-0000-0000-000000000000','33333333-3333-3333-3333-333333333333','authenticated','authenticated','staff@test.local');
+  ('00000000-0000-0000-0000-000000000000','33333333-3333-3333-3333-333333333333','authenticated','authenticated','staff@test.local'),
+  -- U4/U5 yalnizca guvenlik testlerinde (29+) kullanilir; 01-28 etkilenmez.
+  ('00000000-0000-0000-0000-000000000000','44444444-4444-4444-4444-444444444444','authenticated','authenticated','admin@test.local'),
+  ('00000000-0000-0000-0000-000000000000','55555555-5555-5555-5555-555555555555','authenticated','authenticated','owner2@test.local');
 
 -- ========== U1 (owner, B1) ==========
 set local role authenticated;
 select set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
 
-select public.create_business_with_owner('Test Berber') as b1 \gset
+-- Onboarding'in TEK kapisi complete_onboarding'dir. Eski
+-- create_business_with_owner RPC'si 20260718090100 ile kaldirildi (hizmetsiz
+-- isletme uretebiliyordu); zorunlu ilk hizmet artik ayni transaction'da gelir.
+select public.complete_onboarding(
+  'Test Berber', 'TRY', 'Europe/Istanbul',
+  'Koltuk', 250, 15, 10
+) as b1 \gset
 select set_config('test.b1', :'b1', true);
 
-insert into public.services (business_id, name, price_per_minute_minor, rounding_interval_minutes, minimum_charge_minutes, currency_code)
-values (:'b1', 'Koltuk', 250, 15, 10, 'TRY') returning id as s1 \gset
+-- Zorunlu ilk hizmet onboarding icinde olustu; id'sini yakala.
+select id as s1 from public.services where business_id = :'b1' \gset
 select set_config('test.s1', :'s1', true);
 
-insert into public.products (business_id, name, sku, unit_price_minor, currency_code, track_stock)
-values (:'b1', 'Kola', 'KOLA-1', 3000, 'TRY', true) returning id as p1 \gset
+-- Urun artik dogrudan INSERT ile acilamaz (20260718090000): tek yol
+-- create_product_with_stock RPC'sidir. Ilk stogu 0 birakiyoruz ki asagidaki
+-- manuel ledger hareketi trigger'i tek basina dogrulasin.
+select public.create_product_with_stock(
+  :'b1', 'Kola', 'KOLA-1', 3000, 'TRY', true, 0
+) as p1 \gset
 select set_config('test.p1', :'p1', true);
 
 -- Stok, dogrudan kolona yazilarak degil ledger'la girilir; cache'i trigger doldurur.
@@ -41,12 +54,20 @@ end $$;
 
 insert into public.customers (business_id, name) values (:'b1', 'Ali');
 
-insert into public.business_members (business_id, user_id, role)
-values (:'b1', '33333333-3333-3333-3333-333333333333', 'staff');
+-- Uyelik artik dogrudan INSERT ile eklenemez (20260718090200): tek yol
+-- add_business_member RPC'sidir (server-side yetki kontrolu + son owner
+-- invariantini paylasan ortak kural seti).
+select public.add_business_member(
+  :'b1', '33333333-3333-3333-3333-333333333333', 'staff'
+);
 
 -- ========== U2 (yabanci isletme sahibi) ==========
 select set_config('request.jwt.claims','{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}', true);
-select public.create_business_with_owner('Rakip Kuafor') as b2 \gset
+select public.complete_onboarding(
+  'Rakip Kuafor', 'TRY', 'Europe/Istanbul',
+  'Sac Kesim', 300, 10, 5
+) as b2 \gset
+select set_config('test.b2', :'b2', true);
 
 do $$ begin
   if (select count(*) from public.businesses) = 1
@@ -456,5 +477,325 @@ begin
   end if;
 end $$;
 
+-- =============================================================
+-- GUVENLIK SIKILASTIRMA TESTLERI (29-51)
+-- Migration 20260718090000 / 090100 / 090200 icin pozitif + negatif senaryolar.
+-- =============================================================
+
+-- Owner (U1, B1) baglamina don.
+select set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+
+-- ---------- P0-1: stok ledger bypass ----------
+
+do $$ begin
+  update public.products
+     set stock_quantity = 9999
+   where id = current_setting('test.p1')::uuid;
+  raise exception 'FAIL 29: owner stock_quantity''yi dogrudan yazabildi (ledger bypass)!';
+exception when insufficient_privilege then
+  raise notice 'PASS 29: dogrudan stock_quantity UPDATE reddedildi (kolon grant''i yok)';
+end $$;
+
+do $$ begin
+  insert into public.products (business_id, name, unit_price_minor, currency_code, track_stock, stock_quantity)
+  values (current_setting('test.b1')::uuid, 'Kacak Urun', 100, 'TRY', true, 500);
+  raise exception 'FAIL 30: stok verilerek dogrudan urun INSERT edilebildi!';
+exception when insufficient_privilege then
+  raise notice 'PASS 30: dogrudan urun INSERT reddedildi (yalniz create_product_with_stock)';
+end $$;
+
+-- Pozitif kontrol: izin verilen kolonlar hala duzenlenebilmeli.
+update public.products
+   set name = 'Kola Zero', unit_price_minor = 3500, is_active = true
+ where id = current_setting('test.p1')::uuid;
+\echo PASS 31: izin verilen kolonlar (name/unit_price_minor/is_active) guncellenebiliyor
+
+do $$ begin
+  update public.products
+     set business_id = current_setting('test.b2')::uuid
+   where id = current_setting('test.p1')::uuid;
+  raise exception 'FAIL 32: business_id degistirilebildi (tenant kacisi)!';
+exception when insufficient_privilege then
+  raise notice 'PASS 32: business_id UPDATE reddedildi (tenant kimligi sabit)';
+end $$;
+
+do $$ begin
+  update public.products
+     set currency_code = 'USD'
+   where id = current_setting('test.p1')::uuid;
+  raise exception 'FAIL 33: currency_code degistirilebildi (snapshot tutarsizligi)!';
+exception when insufficient_privilege then
+  raise notice 'PASS 33: currency_code UPDATE reddedildi';
+end $$;
+
+-- RPC ile olusturulan urunde ledger toplami == cache (kaynak/cache tutarliligi).
+do $$
+declare
+  v_prod uuid := current_setting('test.prod')::uuid;
+  v_ledger bigint;
+  v_cache bigint;
+begin
+  select coalesce(sum(quantity_delta), 0) into v_ledger
+  from public.inventory_movements where product_id = v_prod;
+  select stock_quantity into v_cache
+  from public.products where id = v_prod;
+
+  if v_ledger = v_cache and v_cache = 24 then
+    raise notice 'PASS 34: RPC ilk stogunda ledger toplami (%) = cache (%)', v_ledger, v_cache;
+  else
+    raise exception 'FAIL 34: ledger (%) ile cache (%) ayristi', v_ledger, v_cache;
+  end if;
+end $$;
+
+-- Staff yetkisizligi: ne RPC ile urun acabilir ne de mevcut urunu guncelleyebilir.
+select set_config('request.jwt.claims','{"sub":"33333333-3333-3333-3333-333333333333","role":"authenticated"}', true);
+
+do $$ begin
+  perform public.create_product_with_stock(
+    current_setting('test.b1')::uuid, 'Staff Urunu', null, 100, 'TRY', true, 5
+  );
+  raise exception 'FAIL 35: staff RPC ile urun olusturabildi!';
+exception when raise_exception then
+  if sqlerrm = 'not_authorized' then
+    raise notice 'PASS 35: staff create_product_with_stock cagiramiyor (not_authorized)';
+  else raise; end if;
+end $$;
+
+do $$
+declare v_rows integer;
+begin
+  update public.products set name = 'Staff Degisikligi'
+   where id = current_setting('test.p1')::uuid;
+  get diagnostics v_rows = row_count;
+  -- RLS UPDATE policy'si owner/admin ister; staff icin hicbir satir eslesmez.
+  if v_rows = 0 then
+    raise notice 'PASS 36: staff urun guncelleyemiyor (RLS policy 0 satir esledi)';
+  else
+    raise exception 'FAIL 36: staff % urun satiri guncelledi!', v_rows;
+  end if;
+end $$;
+
+-- Trigger katmani: GRANT'i olan service_role bile cache'e dogrudan yazamaz.
+-- Bu, korumanin yalniz grant'e degil DB invariantina dayandigini kanitlar.
+set local role service_role;
+do $$ begin
+  update public.products
+     set stock_quantity = 9999
+   where id = current_setting('test.p1')::uuid;
+  raise exception 'FAIL 37: service_role stock_quantity''yi dogrudan yazabildi!';
+exception when raise_exception then
+  if sqlerrm = 'stock_quantity_direct_write_denied' then
+    raise notice 'PASS 37: service_role dahi cache''e dogrudan yazamiyor (trigger guard)';
+  else raise; end if;
+end $$;
+set local role authenticated;
+
+-- ---------- P0-2: eski onboarding RPC bypass'i ----------
+
+select set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+
+do $$ begin
+  perform public.create_business_with_owner('Bypass Isletmesi');
+  raise exception 'FAIL 38: eski create_business_with_owner RPC''si hala cagrilabiliyor!';
+exception when undefined_function then
+  raise notice 'PASS 38: eski create_business_with_owner RPC''si kaldirildi (undefined_function)';
+end $$;
+
+-- Hizmet adi bos ise: hizmet de isletme de owner uyeligi de olusmamali.
+do $$
+declare v_before integer; v_after integer; v_members_before integer; v_members_after integer;
+begin
+  select count(*) into v_before from public.businesses;
+  select count(*) into v_members_before from public.business_members;
+  begin
+    perform public.complete_onboarding('Hizmetsiz', 'TRY', 'Europe/Istanbul', '   ', 100, 1, 0);
+    raise exception 'FAIL 39: hizmetsiz onboarding kabul edildi!';
+  exception when raise_exception then
+    if sqlerrm <> 'service_name_required' then raise; end if;
+  end;
+  select count(*) into v_after from public.businesses;
+  select count(*) into v_members_after from public.business_members;
+
+  if v_before = v_after and v_members_before = v_members_after then
+    raise notice 'PASS 39: hizmet olusturulamayinca isletme ve owner uyeligi de olusmadi';
+  else
+    raise exception 'FAIL 39: yarim kayit kaldi (isletme %/%, uyelik %/%)',
+      v_before, v_after, v_members_before, v_members_after;
+  end if;
+end $$;
+
+-- ---------- P0-3: uyelik yonetimi + son owner invarianti ----------
+
+-- Test kadrosu: U4 admin, U5 staff olarak B1'e eklenir (owner U1 tarafindan).
+select public.add_business_member(
+  current_setting('test.b1')::uuid, '44444444-4444-4444-4444-444444444444', 'admin'
+) as m_admin \gset
+select set_config('test.m_admin', :'m_admin', true);
+
+select public.add_business_member(
+  current_setting('test.b1')::uuid, '55555555-5555-5555-5555-555555555555', 'staff'
+) as m_owner2 \gset
+select set_config('test.m_owner2', :'m_owner2', true);
+
+select set_config('test.m_owner1',
+  (select id::text from public.business_members
+   where business_id = current_setting('test.b1')::uuid
+     and user_id = '11111111-1111-1111-1111-111111111111'), true);
+
+select set_config('test.m_staff',
+  (select id::text from public.business_members
+   where business_id = current_setting('test.b1')::uuid
+     and user_id = '33333333-3333-3333-3333-333333333333'), true);
+
+-- Dogrudan tablo yazmalari tamamen kapali olmali.
+do $$ begin
+  insert into public.business_members (business_id, user_id, role)
+  values (current_setting('test.b1')::uuid, '22222222-2222-2222-2222-222222222222', 'admin');
+  raise exception 'FAIL 40: business_members''a dogrudan INSERT yapilabildi!';
+exception when insufficient_privilege then
+  raise notice 'PASS 40: dogrudan uyelik INSERT reddedildi (yalniz add_business_member)';
+end $$;
+
+do $$ begin
+  update public.business_members set role = 'owner'
+   where id = current_setting('test.m_staff')::uuid;
+  raise exception 'FAIL 41: business_members dogrudan UPDATE edilebildi (yetki yukseltme)!';
+exception when insufficient_privilege then
+  raise notice 'PASS 41: dogrudan uyelik UPDATE reddedildi (yalniz RPC)';
+end $$;
+
+do $$ begin
+  delete from public.business_members where id = current_setting('test.m_staff')::uuid;
+  raise exception 'FAIL 42: business_members dogrudan DELETE edilebildi!';
+exception when insufficient_privilege then
+  raise notice 'PASS 42: dogrudan uyelik DELETE reddedildi (yalniz RPC)';
+end $$;
+
+-- Son owner: silinemez / pasiflestirilemez / rolu dusurulemez.
+do $$ begin
+  perform public.remove_business_member(current_setting('test.m_owner1')::uuid);
+  raise exception 'FAIL 43: son owner kendini silebildi (isletme sahipsiz kalirdi)!';
+exception when raise_exception then
+  if sqlerrm = 'last_owner_protected' then
+    raise notice 'PASS 43: son owner silinemiyor (last_owner_protected)';
+  else raise; end if;
+end $$;
+
+do $$ begin
+  perform public.set_business_member_active(current_setting('test.m_owner1')::uuid, false);
+  raise exception 'FAIL 44: son owner pasiflestirilebildi!';
+exception when raise_exception then
+  if sqlerrm = 'last_owner_protected' then
+    raise notice 'PASS 44: son owner pasiflestirilemiyor';
+  else raise; end if;
+end $$;
+
+do $$ begin
+  perform public.update_business_member_role(current_setting('test.m_owner1')::uuid, 'staff');
+  raise exception 'FAIL 45: son owner''in rolu dusurulebildi!';
+exception when raise_exception then
+  if sqlerrm = 'last_owner_protected' then
+    raise notice 'PASS 45: son owner''in rolu dusurulemiyor';
+  else raise; end if;
+end $$;
+
+-- Admin yetki yukseltme korumasi.
+select set_config('request.jwt.claims','{"sub":"44444444-4444-4444-4444-444444444444","role":"authenticated"}', true);
+
+do $$ begin
+  perform public.update_business_member_role(current_setting('test.m_admin')::uuid, 'owner');
+  raise exception 'FAIL 46: admin kendini owner yapabildi!';
+exception when raise_exception then
+  if sqlerrm = 'not_authorized' then
+    raise notice 'PASS 46: admin kendini owner yapamiyor';
+  else raise; end if;
+end $$;
+
+do $$ begin
+  perform public.set_business_member_active(current_setting('test.m_owner1')::uuid, false);
+  raise exception 'FAIL 47: admin owner satirini pasiflestirebildi!';
+exception when raise_exception then
+  if sqlerrm = 'not_authorized' then
+    raise notice 'PASS 47: admin owner satirina dokunamiyor';
+  else raise; end if;
+end $$;
+
+-- Staff hicbir uyelik islemi yapamaz.
+select set_config('request.jwt.claims','{"sub":"33333333-3333-3333-3333-333333333333","role":"authenticated"}', true);
+
+do $$ begin
+  perform public.add_business_member(
+    current_setting('test.b1')::uuid, '22222222-2222-2222-2222-222222222222', 'staff'
+  );
+  raise exception 'FAIL 48: staff uye ekleyebildi!';
+exception when raise_exception then
+  if sqlerrm = 'not_authorized' then
+    raise notice 'PASS 48: staff uyelik yonetemiyor';
+  else raise; end if;
+end $$;
+
+-- Tenant sinirini asma denemesi: B2 sahibi U2, B1'in uyeligini yonetemez.
+select set_config('request.jwt.claims','{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}', true);
+
+do $$ begin
+  perform public.update_business_member_role(current_setting('test.m_staff')::uuid, 'admin');
+  raise exception 'FAIL 49: baska isletmenin uyeligi degistirilebildi!';
+exception when raise_exception then
+  if sqlerrm = 'not_a_member' then
+    raise notice 'PASS 49: baska isletmenin uyeligi degistirilemiyor (not_a_member)';
+  else raise; end if;
+end $$;
+
+-- Ikinci owner varsa ilk owner GUVENLE ayrilabilir (invariant korunur).
+select set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+
+select public.update_business_member_role(current_setting('test.m_owner2')::uuid, 'owner');
+select public.set_business_member_active(current_setting('test.m_owner1')::uuid, false);
+
+-- Ayrilan owner artik aktif uye olmadigi icin business_members SELECT
+-- policy'si ona hicbir satir gostermez (dogru davranis). Invarianti bu yuzden
+-- HALA uye olan yeni owner (U5) baglaminda dogruluyoruz.
+select set_config('request.jwt.claims','{"sub":"55555555-5555-5555-5555-555555555555","role":"authenticated"}', true);
+
+do $$
+declare v_active_owners integer;
+begin
+  select count(*) into v_active_owners
+  from public.business_members
+  where business_id = current_setting('test.b1')::uuid
+    and role = 'owner' and is_active;
+
+  if v_active_owners = 1 then
+    raise notice 'PASS 50: ikinci owner varken ilk owner ayrilabildi, 1 aktif owner kaldi';
+  else
+    raise exception 'FAIL 50: ayrilma sonrasi aktif owner sayisi % (1 olmaliydi)', v_active_owners;
+  end if;
+end $$;
+
+-- Atomik sahiplik devri: U5 (owner) -> U4 (admin).
+select set_config('request.jwt.claims','{"sub":"55555555-5555-5555-5555-555555555555","role":"authenticated"}', true);
+
+select public.transfer_business_ownership(
+  current_setting('test.b1')::uuid, current_setting('test.m_admin')::uuid
+);
+
+do $$
+declare v_new_owner public.member_role; v_old_owner public.member_role; v_owner_count integer;
+begin
+  select role into v_new_owner from public.business_members
+   where id = current_setting('test.m_admin')::uuid;
+  select role into v_old_owner from public.business_members
+   where id = current_setting('test.m_owner2')::uuid;
+  select count(*) into v_owner_count from public.business_members
+   where business_id = current_setting('test.b1')::uuid and role = 'owner' and is_active;
+
+  if v_new_owner = 'owner' and v_old_owner = 'admin' and v_owner_count = 1 then
+    raise notice 'PASS 51: sahiplik atomik devredildi (hedef owner, cagiran admin, tek owner)';
+  else
+    raise exception 'FAIL 51: devir bozuk (yeni=%, eski=%, owner adedi=%)',
+      v_new_owner, v_old_owner, v_owner_count;
+  end if;
+end $$;
+
 rollback;
-\echo === 28/28 TEST TAMAMLANDI (rollback ile temiz birakildi) ===
+\echo === 51/51 TEST TAMAMLANDI (rollback ile temiz birakildi) ===

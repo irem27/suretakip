@@ -35,11 +35,21 @@ val hasReleaseSigning = listOf(
 ).none { it.isNullOrBlank() }
 
 if (!hasReleaseSigning) {
-    logger.warn(
-        "UYARI: Release imzalama yapılandırması bulunamadı. " +
-            "ANDROID_KEYSTORE_PATH / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / " +
-            "ANDROID_KEY_PASSWORD ortam değişkenlerini ya da android/key.properties " +
-            "dosyasını tanımlayın. Üretilecek release çıktısı İMZASIZ olacaktır."
+    // println kullanılıyor: logger.warn Flutter'ın varsayılan Gradle log
+    // seviyesinde YUTULUYOR (ölçüldü — çıktıda hiç görünmedi). İmzasız APK
+    // sessizce üretilmemeli; geliştirici nedenini görmeli.
+    println(
+        """
+        ============================================================
+        UYARI: Release imzalama yapılandırması bulunamadı.
+        Release çıktısı İMZASIZ üretilecek ve mağazaya yüklenemez.
+
+        Çözüm — ortam değişkenleri (CI) ya da android/key.properties:
+          ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD,
+          ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+        Biçim için: android/key.properties.example
+        ============================================================
+        """.trimIndent()
     )
 }
 

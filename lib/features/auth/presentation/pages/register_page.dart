@@ -7,56 +7,65 @@ import 'package:suretakip/core/utils/form_validators.dart';
 import 'package:suretakip/features/auth/presentation/controllers/auth_controllers.dart';
 import 'package:suretakip/features/auth/presentation/widgets/auth_card_scaffold.dart';
 
-class LoginPage extends ConsumerStatefulWidget {
-  const LoginPage({super.key});
+class RegisterPage extends ConsumerStatefulWidget {
+  const RegisterPage({super.key});
 
   @override
-  ConsumerState<LoginPage> createState() => _LoginPageState();
+  ConsumerState<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _LoginPageState extends ConsumerState<LoginPage> {
+class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmationController = TextEditingController();
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmationController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final success = await ref
-        .read(loginControllerProvider.notifier)
-        .signIn(
+        .read(registerControllerProvider.notifier)
+        .signUp(
           email: _emailController.text,
           password: _passwordController.text,
         );
     if (!mounted || !success) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Giriş başarılı.')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Hesabınız oluşturuldu. Gerekirse e-postanızı doğrulayın.',
+        ),
+      ),
+    );
+    context.go(AppRoutes.login);
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(loginControllerProvider);
-    ref.listen(loginControllerProvider, (_, next) {
+    final state = ref.watch(registerControllerProvider);
+    ref.listen(registerControllerProvider, (_, next) {
       if (!next.hasError) return;
       final error = next.error;
-      final message = error is DomainException
-          ? error.message
-          : 'Giriş yapılamadı. Lütfen tekrar deneyin.';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error is DomainException
+                ? error.message
+                : 'Kayıt oluşturulamadı. Lütfen tekrar deneyin.',
+          ),
+        ),
+      );
     });
-
     return AuthCardScaffold(
-      title: 'Tekrar hoş geldiniz',
-      subtitle: 'İşletmenizi yönetmek için giriş yapın.',
+      title: 'İşletmenizi kurmaya başlayın',
+      subtitle: 'SüreTakip hesabınızı birkaç saniyede oluşturun.',
       child: Form(
         key: _formKey,
         child: Column(
@@ -66,7 +75,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
-              autofillHints: const [AutofillHints.email],
               decoration: const InputDecoration(
                 labelText: 'E-posta',
                 prefixIcon: Icon(Icons.email_outlined),
@@ -77,25 +85,28 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             TextFormField(
               controller: _passwordController,
               obscureText: true,
-              textInputAction: TextInputAction.done,
-              autofillHints: const [AutofillHints.password],
-              onFieldSubmitted: (_) => _submit(),
+              textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
                 labelText: 'Şifre',
                 prefixIcon: Icon(Icons.lock_outline),
               ),
-              validator: (value) =>
-                  (value ?? '').isEmpty ? 'Şifre zorunlu.' : null,
+              validator: FormValidators.password,
             ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: state.isLoading
-                    ? null
-                    : () => context.push(AppRoutes.forgotPassword),
-                child: const Text('Şifremi unuttum'),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _confirmationController,
+              obscureText: true,
+              textInputAction: TextInputAction.done,
+              onFieldSubmitted: (_) => _submit(),
+              decoration: const InputDecoration(
+                labelText: 'Şifre tekrarı',
+                prefixIcon: Icon(Icons.lock_reset_rounded),
               ),
+              validator: (value) => value == _passwordController.text
+                  ? null
+                  : 'Şifreler eşleşmiyor.',
             ),
+            const SizedBox(height: 24),
             FilledButton(
               onPressed: state.isLoading ? null : _submit,
               child: Padding(
@@ -107,15 +118,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           strokeWidth: 2,
                         ),
                       )
-                    : const Text('Giriş Yap'),
+                    : const Text('Kayıt Ol'),
               ),
             ),
             const SizedBox(height: 12),
             TextButton(
               onPressed: state.isLoading
                   ? null
-                  : () => context.push(AppRoutes.register),
-              child: const Text('Hesabınız yok mu? Kayıt olun'),
+                  : () => context.go(AppRoutes.login),
+              child: const Text('Giriş ekranına dön'),
             ),
           ],
         ),

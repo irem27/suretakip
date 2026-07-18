@@ -5,6 +5,7 @@ import 'package:suretakip/core/errors/supabase_error_guard.dart';
 import 'package:suretakip/core/logging/app_logger.dart';
 import 'package:suretakip/core/logging/noop_app_logger.dart';
 import 'package:suretakip/features/auth/data/datasources/auth_remote_data_source.dart';
+import 'package:suretakip/features/auth/domain/entities/auth_session_state.dart';
 import 'package:suretakip/features/auth/domain/repositories/auth_repository.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
@@ -17,8 +18,7 @@ class AuthRepositoryImpl implements AuthRepository {
   final AppLogger _logger;
 
   @override
-  Stream<String?> watchAuthenticatedUserId() =>
-      _dataSource.watchAuthenticatedUserId();
+  Stream<AuthSessionState> watchAuthState() => _dataSource.watchAuthState();
 
   @override
   Future<String?> getAuthenticatedUserId() async =>
@@ -35,6 +35,10 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<void> sendPasswordResetEmail({required String email}) =>
       _run(() => _dataSource.sendPasswordResetEmail(email: email));
+
+  @override
+  Future<void> updatePassword({required String newPassword}) =>
+      _run(() => _dataSource.updatePassword(newPassword: newPassword));
 
   @override
   Future<void> signOut() => _run(_dataSource.signOut);

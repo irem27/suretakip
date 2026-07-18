@@ -7,6 +7,7 @@ import 'package:suretakip/app/router/startup_page.dart';
 import 'package:suretakip/features/auth/presentation/pages/forgot_password_page.dart';
 import 'package:suretakip/features/auth/presentation/pages/login_page.dart';
 import 'package:suretakip/features/auth/presentation/pages/register_page.dart';
+import 'package:suretakip/features/auth/presentation/pages/reset_password_page.dart';
 import 'package:suretakip/features/businesses/presentation/pages/onboarding_page.dart';
 import 'package:suretakip/features/dashboard/presentation/pages/dashboard_page.dart';
 import 'package:suretakip/features/definitions/presentation/pages/definitions_menu_page.dart';
@@ -34,7 +35,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   ref.listen(authenticatedUserIdProvider, (_, _) => refresh.value++);
   ref.listen(userBusinessesProvider, (_, _) => refresh.value++);
 
-  return GoRouter(
+  late final GoRouter router;
+  router = GoRouter(
     initialLocation: AppRoutes.startup,
     refreshListenable: refresh,
     routes: [
@@ -57,6 +59,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: AppRouteNames.forgotPassword,
         path: AppRoutes.forgotPassword,
         builder: (context, state) => const ForgotPasswordPage(),
+      ),
+      GoRoute(
+        name: AppRouteNames.resetPassword,
+        path: AppRoutes.resetPassword,
+        builder: (context, state) => const ResetPasswordPage(),
       ),
       GoRoute(
         name: AppRouteNames.onboarding,
@@ -170,14 +177,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Güncel durum her çağrıda taze okunur (router yeniden yaratılmadığı için).
       final auth = ref.read(authenticatedUserIdProvider);
       final businesses = ref.read(userBusinessesProvider);
+      final isResetPassword = state.matchedLocation == AppRoutes.resetPassword;
 
-      if (auth.isLoading ||
-          (auth.valueOrNull != null && businesses.isLoading)) {
+      if (auth.isLoading) {
+        if (isResetPassword) return null;
         return state.matchedLocation == AppRoutes.startup
             ? null
             : AppRoutes.startup;
       }
-      if (auth.hasError || businesses.hasError) {
+      if (auth.hasError) {
         return state.matchedLocation == AppRoutes.startup
             ? null
             : AppRoutes.startup;
@@ -188,8 +196,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         AppRoutes.login,
         AppRoutes.register,
         AppRoutes.forgotPassword,
+        AppRoutes.resetPassword,
       }.contains(state.matchedLocation);
       if (userId == null) return isAuthPage ? null : AppRoutes.login;
+      if (isResetPassword) return null;
+
+      if (businesses.isLoading || businesses.hasError) {
+        return state.matchedLocation == AppRoutes.startup
+            ? null
+            : AppRoutes.startup;
+      }
 
       final hasBusiness = businesses.valueOrNull?.isNotEmpty ?? false;
       if (!hasBusiness) {
@@ -217,4 +233,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return isBusinessPage || isSessionPage ? null : AppRoutes.dashboard;
     },
   );
+
+  ref.listen(authSessionStateProvider, (_, next) {
+    if (!(next.valueOrNull?.isPasswordRecovery ?? false)) return;
+    router.go(AppRoutes.resetPassword);
+  }, fireImmediately: true);
+
+  return router;
 });

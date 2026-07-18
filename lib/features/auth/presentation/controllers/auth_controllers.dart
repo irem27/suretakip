@@ -46,6 +46,21 @@ class PasswordResetController extends AsyncNotifier<void> {
   }
 }
 
+class UpdatePasswordController extends AsyncNotifier<void> {
+  @override
+  Future<void> build() async {}
+
+  Future<bool> changePassword(String newPassword) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref
+          .read(authRepositoryProvider)
+          .updatePassword(newPassword: newPassword),
+    );
+    return !state.hasError;
+  }
+}
+
 class SignOutController extends AsyncNotifier<void> {
   @override
   Future<void> build() async {}
@@ -66,6 +81,10 @@ final registerControllerProvider =
 final passwordResetControllerProvider =
     AsyncNotifierProvider<PasswordResetController, void>(
       PasswordResetController.new,
+    );
+final updatePasswordControllerProvider =
+    AsyncNotifierProvider<UpdatePasswordController, void>(
+      UpdatePasswordController.new,
     );
 final signOutControllerProvider =
     AsyncNotifierProvider<SignOutController, void>(SignOutController.new);

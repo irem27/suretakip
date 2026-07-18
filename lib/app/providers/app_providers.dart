@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:suretakip/core/logging/app_logger_provider.dart';
 import 'package:suretakip/features/auth/data/datasources/auth_remote_data_source.dart';
 import 'package:suretakip/features/auth/data/repositories/auth_repository_impl.dart';
+import 'package:suretakip/features/auth/domain/entities/auth_session_state.dart';
 import 'package:suretakip/features/auth/domain/repositories/auth_repository.dart';
 import 'package:suretakip/features/businesses/data/datasources/businesses_remote_data_source.dart';
 import 'package:suretakip/features/businesses/data/repositories/businesses_repository_impl.dart';
@@ -44,8 +45,12 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   );
 });
 
-final authenticatedUserIdProvider = StreamProvider<String?>((ref) {
-  return ref.watch(authRepositoryProvider).watchAuthenticatedUserId();
+final authSessionStateProvider = StreamProvider<AuthSessionState>((ref) {
+  return ref.watch(authRepositoryProvider).watchAuthState();
+});
+
+final authenticatedUserIdProvider = Provider<AsyncValue<String?>>((ref) {
+  return ref.watch(authSessionStateProvider).whenData((state) => state.userId);
 });
 
 final currentUserProvider = Provider<User?>((ref) {
@@ -65,7 +70,8 @@ final businessesRepositoryProvider = Provider<BusinessesRepository>((ref) {
 });
 
 final userBusinessesProvider = FutureProvider<List<Business>>((ref) async {
-  final userId = await ref.watch(authenticatedUserIdProvider.future);
+  final authState = await ref.watch(authSessionStateProvider.future);
+  final userId = authState.userId;
   if (userId == null) return const [];
   return ref.watch(businessesRepositoryProvider).getBusinesses();
 });

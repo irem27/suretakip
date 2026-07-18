@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/features/auth/domain/entities/auth_session_state.dart';
 import 'package:suretakip/features/auth/domain/repositories/auth_repository.dart';
 import 'package:suretakip/features/auth/presentation/pages/login_page.dart';
 
@@ -10,7 +11,7 @@ import 'package:suretakip/features/auth/presentation/pages/login_page.dart';
 /// bağlantı kurmadan render edilebilsin diye.
 class _FakeAuthRepository implements AuthRepository {
   @override
-  Stream<String?> watchAuthenticatedUserId() => const Stream.empty();
+  Stream<AuthSessionState> watchAuthState() => const Stream.empty();
 
   @override
   Future<String?> getAuthenticatedUserId() async => null;
@@ -29,6 +30,9 @@ class _FakeAuthRepository implements AuthRepository {
 
   @override
   Future<void> sendPasswordResetEmail({required String email}) async {}
+
+  @override
+  Future<void> updatePassword({required String newPassword}) async {}
 
   @override
   Future<void> signOut() async {}

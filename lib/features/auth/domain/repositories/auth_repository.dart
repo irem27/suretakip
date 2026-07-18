@@ -1,5 +1,7 @@
+import 'package:suretakip/features/auth/domain/entities/auth_session_state.dart';
+
 abstract interface class AuthRepository {
-  Stream<String?> watchAuthenticatedUserId();
+  Stream<AuthSessionState> watchAuthState();
 
   Future<String?> getAuthenticatedUserId();
 
@@ -11,6 +13,8 @@ abstract interface class AuthRepository {
 
   /// Verilen e-posta adresine şifre sıfırlama bağlantısı gönderir.
   Future<void> sendPasswordResetEmail({required String email});
+
+  Future<void> updatePassword({required String newPassword});
 
   Future<void> signOut();
 }

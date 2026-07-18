@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/features/auth/domain/entities/auth_session_state.dart';
 import 'package:suretakip/features/auth/domain/repositories/auth_repository.dart';
 import 'package:suretakip/features/auth/presentation/controllers/auth_controllers.dart';
 
@@ -38,12 +39,28 @@ void main() {
     expect(success, isTrue);
     expect(repository.resetEmail, 'test@example.com');
   });
+
+  test('UpdatePasswordController yeni şifreyi repositoryye iletir', () async {
+    final repository = _FakeAuthRepository();
+    final container = ProviderContainer(
+      overrides: [authRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+
+    final success = await container
+        .read(updatePasswordControllerProvider.notifier)
+        .changePassword('yeni-secret');
+
+    expect(success, isTrue);
+    expect(repository.newPassword, 'yeni-secret');
+  });
 }
 
 class _FakeAuthRepository implements AuthRepository {
   String? email;
   String? password;
   String? resetEmail;
+  String? newPassword;
 
   @override
   Future<String?> getAuthenticatedUserId() async => null;
@@ -51,6 +68,11 @@ class _FakeAuthRepository implements AuthRepository {
   @override
   Future<void> sendPasswordResetEmail({required String email}) async {
     resetEmail = email;
+  }
+
+  @override
+  Future<void> updatePassword({required String newPassword}) async {
+    this.newPassword = newPassword;
   }
 
   @override
@@ -69,5 +91,5 @@ class _FakeAuthRepository implements AuthRepository {
   }) async {}
 
   @override
-  Stream<String?> watchAuthenticatedUserId() => const Stream.empty();
+  Stream<AuthSessionState> watchAuthState() => const Stream.empty();
 }

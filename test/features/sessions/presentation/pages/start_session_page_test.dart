@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
 import 'package:suretakip/features/customers/presentation/controllers/customers_controllers.dart';
 import 'package:suretakip/features/services/domain/entities/service.dart';
@@ -43,16 +44,17 @@ void main() {
 
 class _FakeCustomersListController extends CustomersListController {
   @override
-  Future<CustomersListState> build() async =>
+  Future<CustomersListState> build(BusinessScope scope) async =>
       CustomersListState(customers: [_customer()], query: '');
 }
 
 class _FakeServicesListController extends ServicesListController {
   @override
-  Future<ServicesListState> build() async => ServicesListState(
-    services: [_service()],
-    filter: ServiceStatusFilter.all,
-  );
+  Future<ServicesListState> build(BusinessScope scope) async =>
+      ServicesListState(
+        services: [_service()],
+        filter: ServiceStatusFilter.all,
+      );
 }
 
 class _FakeStartSessionController extends StartSessionController {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/core/errors/domain_exception.dart';
 import 'package:suretakip/features/products/domain/entities/product.dart';
 import 'package:suretakip/features/products/presentation/controllers/products_controllers.dart';
@@ -182,7 +183,7 @@ class _ProductsListController extends ProductsListController {
   int refreshCount = 0;
 
   @override
-  Future<ProductsListState> build() async {
+  Future<ProductsListState> build(BusinessScope scope) async {
     if (error != null) throw error!;
     return ProductsListState(
       products: products,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/core/errors/domain_exception.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/features/products/domain/entities/product.dart';
@@ -40,7 +41,9 @@ class _ProductPickerSheetState extends ConsumerState<ProductPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final productsAsync = ref.watch(productsListControllerProvider);
+    final scope = ref.watch(activeBusinessScopeProvider);
+    final productsProvider = productsListControllerProvider(scope);
+    final productsAsync = ref.watch(productsProvider);
     final action = ref.watch(sessionActionsControllerProvider);
     final selected = _selectedProduct;
     // Client-side ön kontrol; kesin doğrulama yine DB'de (insufficient_stock).
@@ -88,9 +91,7 @@ class _ProductPickerSheetState extends ConsumerState<ProductPickerSheet> {
                 error: (error, _) => AppErrorState(
                   error: error,
                   fallbackMessage: 'Ürünler yüklenemedi.',
-                  onRetry: () => ref
-                      .read(productsListControllerProvider.notifier)
-                      .refresh(),
+                  onRetry: () => ref.read(productsProvider.notifier).refresh(),
                   padding: const EdgeInsets.all(16),
                   iconSize: 40,
                 ),

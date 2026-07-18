@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
+import 'package:suretakip/core/utils/monotonic_clock.dart';
 import 'package:suretakip/features/businesses/domain/entities/business.dart';
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_item.dart';
@@ -10,6 +11,8 @@ import 'package:suretakip/features/sessions/domain/entities/session_time_entry.d
 import 'package:suretakip/features/sessions/domain/repositories/sessions_repository.dart';
 import 'package:suretakip/features/sessions/presentation/controllers/sessions_controllers.dart';
 
+import '../../../../helpers/fake_monotonic_clock.dart';
+
 void main() {
   test('liste controller aktif işletmenin seanslarını yükler', () async {
     final repository = _FakeSessionsRepository();
@@ -17,7 +20,7 @@ void main() {
     addTearDown(container.dispose);
 
     final sessions = await container.read(
-      sessionsListControllerProvider.future,
+      sessionsListControllerProvider(_scope).future,
     );
 
     expect(sessions, hasLength(1));
@@ -56,15 +59,131 @@ void main() {
     expect(success, isTrue);
     expect(repository.pausedSessionId, 'session-1');
   });
+
+  test('cihaz duvar saati ileri veya geri alınsa da canlı süre değişmez', () {
+    final clock = FakeMonotonicClock();
+    final state = _detailState(clock: clock);
+    final initialDuration = state.quote.activeDuration;
+    var deviceWallClock = DateTime.utc(2026, 7, 17, 12, 10);
+
+    deviceWallClock = deviceWallClock.add(const Duration(days: 2));
+    expect(deviceWallClock, DateTime.utc(2026, 7, 19, 12, 10));
+    expect(clock.elapsed, Duration.zero);
+    expect(state.quote.activeDuration, initialDuration);
+
+    deviceWallClock = deviceWallClock.subtract(const Duration(days: 5));
+    expect(deviceWallClock, DateTime.utc(2026, 7, 14, 12, 10));
+    expect(clock.elapsed, Duration.zero);
+    expect(state.quote.activeDuration, initialDuration);
+  });
+
+  test('monotonik süre arttıkça canlı sayaç doğru ilerler', () {
+    final clock = FakeMonotonicClock();
+    final state = _detailState(clock: clock);
+
+    expect(state.effectiveServerNow, DateTime.utc(2026, 7, 17, 12, 10));
+    expect(state.quote.activeDuration, const Duration(minutes: 10));
+
+    clock.advance(const Duration(minutes: 2, seconds: 37));
+
+    expect(state.effectiveServerNow, DateTime.utc(2026, 7, 17, 12, 12, 37));
+    expect(
+      state.quote.activeDuration,
+      const Duration(minutes: 12, seconds: 37),
+    );
+  });
+
+  test(
+    'duraklatılmış seansta monotonik saat ilerlese de aktif süre artmaz',
+    () {
+      final clock = FakeMonotonicClock();
+      final state = _detailState(
+        clock: clock,
+        status: SessionStatus.paused,
+        activeEndedAt: DateTime.utc(2026, 7, 17, 12, 5),
+      );
+
+      expect(state.quote.activeDuration, const Duration(minutes: 5));
+
+      clock.advance(const Duration(hours: 3));
+
+      expect(state.quote.activeDuration, const Duration(minutes: 5));
+    },
+  );
+
+  test(
+    'pause, resume ve refetch yeni sunucu çapası ile monotonik saat kullanır',
+    () async {
+      final repository = _FakeSessionsRepository()
+        ..serverTimes = [
+          DateTime.utc(2026, 7, 17, 12),
+          DateTime.utc(2026, 7, 17, 14),
+          DateTime.utc(2026, 7, 17, 16),
+        ];
+      final firstClock = FakeMonotonicClock();
+      final secondClock = FakeMonotonicClock();
+      final thirdClock = FakeMonotonicClock();
+      final clocks = [firstClock, secondClock, thirdClock];
+      final container = _container(
+        repository,
+        clockFactory: () => clocks.removeAt(0),
+      );
+      final subscription = container.listen(
+        sessionDetailProvider('session-1'),
+        (_, _) {},
+      );
+
+      final first = await container.read(
+        sessionDetailProvider('session-1').future,
+      );
+      expect(first.effectiveServerNow, DateTime.utc(2026, 7, 17, 12));
+      firstClock.advance(const Duration(minutes: 20));
+      expect(first.effectiveServerNow, DateTime.utc(2026, 7, 17, 12, 20));
+
+      await container
+          .read(sessionActionsControllerProvider.notifier)
+          .pause('session-1');
+      final second = await container.read(
+        sessionDetailProvider('session-1').future,
+      );
+
+      expect(firstClock.isStopped, isTrue);
+      expect(second.serverAnchor, DateTime.utc(2026, 7, 17, 14));
+      expect(second.effectiveServerNow, DateTime.utc(2026, 7, 17, 14));
+      secondClock.advance(const Duration(minutes: 15));
+
+      await container
+          .read(sessionActionsControllerProvider.notifier)
+          .resume('session-1');
+      final third = await container.read(
+        sessionDetailProvider('session-1').future,
+      );
+
+      expect(secondClock.isStopped, isTrue);
+      expect(third.serverAnchor, DateTime.utc(2026, 7, 17, 16));
+      expect(third.effectiveServerNow, DateTime.utc(2026, 7, 17, 16));
+      expect(repository.serverNowCallCount, 3);
+
+      subscription.close();
+      container.dispose();
+      expect(thirdClock.isStopped, isTrue);
+    },
+  );
 }
 
-ProviderContainer _container(_FakeSessionsRepository repository) =>
-    ProviderContainer(
-      overrides: [
-        sessionsRepositoryProvider.overrideWithValue(repository),
-        activeBusinessProvider.overrideWithValue(_business()),
-      ],
-    );
+const BusinessScope _scope = (businessId: 'business-1', generation: 0);
+
+ProviderContainer _container(
+  _FakeSessionsRepository repository, {
+  MonotonicClock Function()? clockFactory,
+}) => ProviderContainer(
+  overrides: [
+    sessionsRepositoryProvider.overrideWithValue(repository),
+    activeBusinessProvider.overrideWithValue(_business()),
+    if (clockFactory != null)
+      monotonicClockFactoryProvider.overrideWithValue(clockFactory),
+  ],
+);
 
 Business _business() => Business(
   id: 'business-1',
@@ -103,6 +222,30 @@ Session _session() => Session(
   updatedAt: DateTime.utc(2026, 7, 17),
 );
 
+SessionDetailState _detailState({
+  required FakeMonotonicClock clock,
+  SessionStatus status = SessionStatus.active,
+  DateTime? activeEndedAt,
+}) => SessionDetailState(
+  session: _session().copyWith(status: status),
+  customerName: null,
+  items: const [],
+  timeEntries: [
+    SessionTimeEntry(
+      id: 'entry-1',
+      businessId: 'business-1',
+      sessionId: 'session-1',
+      entryType: TimeEntryType.active,
+      startedAt: DateTime.utc(2026, 7, 17, 12),
+      endedAt: activeEndedAt,
+      createdAt: DateTime.utc(2026, 7, 17, 12),
+    ),
+  ],
+  serverAnchor: DateTime.utc(2026, 7, 17, 12, 10),
+  clock: clock,
+  clockAnchor: clock.elapsed,
+);
+
 class _FakeSessionsRepository implements SessionsRepository {
   String? loadedBusinessId;
   String? startedBusinessId;
@@ -110,6 +253,8 @@ class _FakeSessionsRepository implements SessionsRepository {
   String? startedCustomerId;
   String? startedNotes;
   String? pausedSessionId;
+  List<DateTime> serverTimes = [DateTime.utc(2026, 7, 17, 12)];
+  int serverNowCallCount = 0;
 
   @override
   Future<List<Session>> getSessions({
@@ -180,5 +325,5 @@ class _FakeSessionsRepository implements SessionsRepository {
   ) async => const [];
 
   @override
-  Future<DateTime> serverNow() async => DateTime.utc(2026, 7, 17, 12);
+  Future<DateTime> serverNow() async => serverTimes[serverNowCallCount++];
 }

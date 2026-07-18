@@ -8,6 +8,8 @@ import 'package:suretakip/features/sessions/domain/entities/session_time_entry.d
 import 'package:suretakip/features/sessions/presentation/controllers/sessions_controllers.dart';
 import 'package:suretakip/features/sessions/presentation/pages/session_detail_page.dart';
 
+import '../../../../helpers/fake_monotonic_clock.dart';
+
 void main() {
   testWidgets('ağ hatası bağlantı mesajı, ikonu ve yeniden denemeyi gösterir', (
     tester,
@@ -173,7 +175,8 @@ SessionDetailState _completedState({
     ),
   ],
   serverAnchor: DateTime.utc(2026, 7, 17, 13),
-  clientAnchor: DateTime.utc(2026, 7, 17, 13),
+  clock: FakeMonotonicClock(),
+  clockAnchor: Duration.zero,
 );
 
 SessionDetailState _cancelledWithoutTotalsState() => SessionDetailState(
@@ -192,7 +195,8 @@ SessionDetailState _cancelledWithoutTotalsState() => SessionDetailState(
     ),
   ],
   serverAnchor: DateTime.utc(2026, 7, 17, 13),
-  clientAnchor: DateTime.utc(2026, 7, 17, 13),
+  clock: FakeMonotonicClock(),
+  clockAnchor: Duration.zero,
 );
 
 SessionDetailState _activeState() => SessionDetailState(
@@ -211,7 +215,8 @@ SessionDetailState _activeState() => SessionDetailState(
     ),
   ],
   serverAnchor: DateTime.utc(2026, 7, 17, 12, 10),
-  clientAnchor: DateTime.utc(2026, 7, 17, 12, 10),
+  clock: FakeMonotonicClock(),
+  clockAnchor: Duration.zero,
 );
 
 Session _session({

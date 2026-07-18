@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
+import 'package:suretakip/core/utils/monotonic_clock.dart';
 import 'package:suretakip/core/value_objects/money.dart';
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_item.dart';
@@ -18,8 +19,10 @@ final class SessionDetailState {
     required this.items,
     required this.timeEntries,
     required this.serverAnchor,
-    required this.clientAnchor,
-  });
+    required MonotonicClock clock,
+    required Duration clockAnchor,
+  }) : _clock = clock,
+       _clockAnchor = clockAnchor;
 
   final Session session;
   final String? customerName;
@@ -30,21 +33,24 @@ final class SessionDetailState {
   /// türetilir; cihaz saati kaymış olsa bile canlı sayaç doğru kalır.
   final DateTime serverAnchor;
 
-  /// Fetch anındaki cihaz zamanı; canlı tik ile geçen süreyi ölçmek için.
-  final DateTime clientAnchor;
+  final MonotonicClock _clock;
+  final Duration _clockAnchor;
 
-  /// Cihaz saatinden bağımsız "şu anki sunucu zamanı":
-  /// serverAnchor + (cihazNow − clientAnchor).
-  DateTime effectiveServerNow(DateTime clientNow) =>
-      serverAnchor.add(clientNow.difference(clientAnchor));
+  /// Cihaz duvar saatinden bağımsız "şu anki sunucu zamanı".
+  DateTime get effectiveServerNow {
+    final elapsedSinceAnchor = _clock.elapsed - _clockAnchor;
+    return serverAnchor.add(
+      elapsedSinceAnchor.isNegative ? Duration.zero : elapsedSinceAnchor,
+    );
+  }
 
   /// Açık (aktif/duraklatılmış) seansların CANLI önizlemesi. Kalıcı/final
   /// hesap daima server-side complete_session RPC'sindedir; tamamlanmış
   /// seanslar bu önizlemeyi değil DB'deki kesin tutarları gösterir.
-  SessionPriceQuote quoteAt(DateTime clientNow) {
+  SessionPriceQuote get quote {
     final activeDuration = calculateSessionActiveDuration(
       entries: timeEntries,
-      serverNow: effectiveServerNow(clientNow),
+      serverNow: effectiveServerNow,
     );
     return const SessionPriceCalculator().calculate(
       activeDuration: activeDuration,
@@ -67,21 +73,21 @@ final class SessionDetailState {
   }
 }
 
-class SessionsListController extends AsyncNotifier<List<Session>> {
+class SessionsListController
+    extends AutoDisposeFamilyAsyncNotifier<List<Session>, BusinessScope> {
   @override
-  Future<List<Session>> build() => _load();
+  Future<List<Session>> build(BusinessScope scope) => _load(scope.businessId);
 
   Future<void> refresh() async {
     state = const AsyncLoading<List<Session>>().copyWithPrevious(state);
-    state = await AsyncValue.guard(_load);
+    state = await AsyncValue.guard(() => _load(arg.businessId));
   }
 
-  Future<List<Session>> _load() async {
-    final business = ref.watch(activeBusinessProvider);
-    if (business == null) return const [];
+  Future<List<Session>> _load(String? businessId) async {
+    if (businessId == null) return const [];
     return ref
         .watch(sessionsRepositoryProvider)
-        .getSessions(businessId: business.id);
+        .getSessions(businessId: businessId);
   }
 }
 
@@ -107,8 +113,9 @@ class StartSessionController extends AsyncNotifier<void> {
             customerId: customerId,
             notes: notes,
           );
-      ref.invalidate(sessionsListControllerProvider);
-      ref.invalidate(dashboardControllerProvider);
+      final scope = ref.read(activeBusinessScopeProvider);
+      ref.invalidate(sessionsListControllerProvider(scope));
+      ref.invalidate(dashboardControllerProvider(scope));
     });
     return state.hasError ? null : sessionId;
   }
@@ -150,7 +157,11 @@ class SessionActionsController extends AsyncNotifier<void> {
             taxMinor: taxMinor,
           ),
     );
-    if (success) ref.invalidate(productsListControllerProvider);
+    if (success) {
+      ref.invalidate(
+        productsListControllerProvider(ref.read(activeBusinessScopeProvider)),
+      );
+    }
     return success;
   }
 
@@ -171,9 +182,10 @@ class SessionActionsController extends AsyncNotifier<void> {
     );
     // Seans tamamlanınca geçmiş ve raporlar değişir.
     if (success) {
-      ref.invalidate(dashboardControllerProvider);
-      ref.invalidate(historyControllerProvider);
-      ref.invalidate(reportsControllerProvider);
+      final scope = ref.read(activeBusinessScopeProvider);
+      ref.invalidate(dashboardControllerProvider(scope));
+      ref.invalidate(historyControllerProvider(scope));
+      ref.invalidate(reportsControllerProvider(scope));
     }
     return success;
   }
@@ -187,10 +199,11 @@ class SessionActionsController extends AsyncNotifier<void> {
     );
     // İptalde stok iade edilir; seans geçmişe/raporlara yansır.
     if (success) {
-      ref.invalidate(dashboardControllerProvider);
-      ref.invalidate(productsListControllerProvider);
-      ref.invalidate(historyControllerProvider);
-      ref.invalidate(reportsControllerProvider);
+      final scope = ref.read(activeBusinessScopeProvider);
+      ref.invalidate(dashboardControllerProvider(scope));
+      ref.invalidate(productsListControllerProvider(scope));
+      ref.invalidate(historyControllerProvider(scope));
+      ref.invalidate(reportsControllerProvider(scope));
     }
     return success;
   }
@@ -203,14 +216,16 @@ class SessionActionsController extends AsyncNotifier<void> {
     state = await AsyncValue.guard(() async {
       await operation();
       ref.invalidate(sessionDetailProvider(sessionId));
-      ref.invalidate(sessionsListControllerProvider);
+      ref.invalidate(
+        sessionsListControllerProvider(ref.read(activeBusinessScopeProvider)),
+      );
     });
     return !state.hasError;
   }
 }
 
-final sessionsListControllerProvider =
-    AsyncNotifierProvider<SessionsListController, List<Session>>(
+final sessionsListControllerProvider = AsyncNotifierProvider.autoDispose
+    .family<SessionsListController, List<Session>, BusinessScope>(
       SessionsListController.new,
     );
 
@@ -224,9 +239,15 @@ final sessionActionsControllerProvider =
       SessionActionsController.new,
     );
 
+final monotonicClockFactoryProvider = Provider<MonotonicClock Function()>(
+  (ref) => StopwatchMonotonicClock.new,
+);
+
 final sessionDetailProvider = FutureProvider.autoDispose
     .family<SessionDetailState, String>((ref, sessionId) async {
       final repository = ref.watch(sessionsRepositoryProvider);
+      final clock = ref.watch(monotonicClockFactoryProvider)();
+      ref.onDispose(clock.stop);
       final session = await repository.getSession(sessionId);
       final customerFuture = session.customerId == null
           ? Future<String?>.value(null)
@@ -234,25 +255,27 @@ final sessionDetailProvider = FutureProvider.autoDispose
                 .watch(customersRepositoryProvider)
                 .getCustomer(session.customerId!)
                 .then<String?>((customer) => customer.name);
-      final (items, entries, customerName, serverNow) = await (
+      final (items, entries, customerName) = await (
         repository.getSessionItems(sessionId),
         repository.getSessionTimeEntries(sessionId),
         customerFuture,
-        repository.serverNow(),
       ).wait;
+      final serverNow = await repository.serverNow();
       return SessionDetailState(
         session: session,
         customerName: customerName,
         items: items,
         timeEntries: entries,
         serverAnchor: serverNow,
-        clientAnchor: DateTime.now().toUtc(),
+        clock: clock,
+        clockAnchor: clock.elapsed,
       );
     });
 
 final openSessionsProvider = Provider<AsyncValue<List<Session>>>((ref) {
+  final scope = ref.watch(activeBusinessScopeProvider);
   return ref
-      .watch(sessionsListControllerProvider)
+      .watch(sessionsListControllerProvider(scope))
       .whenData(
         (sessions) => sessions
             .where(

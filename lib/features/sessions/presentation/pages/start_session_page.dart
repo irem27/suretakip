@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/router/app_routes.dart';
 import 'package:suretakip/core/errors/domain_exception.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
@@ -31,8 +32,11 @@ class _StartSessionPageState extends ConsumerState<StartSessionPage> {
 
   @override
   Widget build(BuildContext context) {
-    final customers = ref.watch(customersListControllerProvider);
-    final services = ref.watch(servicesListControllerProvider);
+    final scope = ref.watch(activeBusinessScopeProvider);
+    final customersProvider = customersListControllerProvider(scope);
+    final servicesProvider = servicesListControllerProvider(scope);
+    final customers = ref.watch(customersProvider);
+    final services = ref.watch(servicesProvider);
     final submit = ref.watch(startSessionControllerProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Yeni İşlem')),
@@ -48,9 +52,7 @@ class _StartSessionPageState extends ConsumerState<StartSessionPage> {
               error: (error, _) => AppErrorState(
                 error: error,
                 fallbackMessage: 'Müşteriler yüklenemedi.',
-                onRetry: () => ref
-                    .read(customersListControllerProvider.notifier)
-                    .refresh(),
+                onRetry: () => ref.read(customersProvider.notifier).refresh(),
                 padding: const EdgeInsets.all(16),
                 iconSize: 40,
               ),
@@ -71,8 +73,7 @@ class _StartSessionPageState extends ConsumerState<StartSessionPage> {
               error: (error, _) => AppErrorState(
                 error: error,
                 fallbackMessage: 'Hizmetler yüklenemedi.',
-                onRetry: () =>
-                    ref.read(servicesListControllerProvider.notifier).refresh(),
+                onRetry: () => ref.read(servicesProvider.notifier).refresh(),
                 padding: const EdgeInsets.all(16),
                 iconSize: 40,
               ),

@@ -23,7 +23,6 @@ class SessionDetailPage extends ConsumerStatefulWidget {
 
 class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
   late final Timer _timer;
-  DateTime _visualNow = DateTime.now().toUtc();
 
   @override
   void initState() {
@@ -38,7 +37,7 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
           ?.session
           .status;
       if (status != SessionStatus.active) return;
-      setState(() => _visualNow = DateTime.now().toUtc());
+      setState(() {});
     });
   }
 
@@ -66,7 +65,6 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
           ),
           data: (data) => _DetailContent(
             data: data,
-            visualNow: _visualNow,
             loading: action.isLoading,
             onTogglePause: () => _togglePause(data.session.status),
             onAddProduct: () => showProductPickerSheet(
@@ -92,7 +90,7 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
   }
 
   Future<void> _confirmComplete(SessionDetailState data) async {
-    final quote = data.quoteAt(_visualNow);
+    final quote = data.quote;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -182,7 +180,6 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
 class _DetailContent extends StatelessWidget {
   const _DetailContent({
     required this.data,
-    required this.visualNow,
     required this.loading,
     required this.onTogglePause,
     required this.onAddProduct,
@@ -191,7 +188,6 @@ class _DetailContent extends StatelessWidget {
   });
 
   final SessionDetailState data;
-  final DateTime visualNow;
   final bool loading;
   final VoidCallback onTogglePause;
   final VoidCallback onAddProduct;
@@ -207,7 +203,7 @@ class _DetailContent extends StatelessWidget {
     final isCompleted = session.status == SessionStatus.completed;
     final hasFinalTotals = session.grandTotalMinor != null;
     // Açık seansta CANLI önizleme; tamamlanmışta DB'nin kesin tutarları.
-    final quote = isOpen ? data.quoteAt(visualNow) : null;
+    final quote = isOpen ? data.quote : null;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [

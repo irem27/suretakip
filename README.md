@@ -61,6 +61,29 @@ olmalıdır.
 > `--dart-define-from-file` verilmezse uygulama başlangıçta anlaşılır bir hata
 > (`SUPABASE_URL ve SUPABASE_ANON_KEY tanımlı değil`) ile durur.
 
+### Yerel Supabase + Android emülatörü
+
+Android emülatöründe `localhost` / `127.0.0.1` **emülatörün kendisini** işaret
+eder; host makine `10.0.2.2` üzerinden erişilir. Yerel Supabase'e bağlanacaksanız
+ayrı bir env dosyası kullanın:
+
+```bash
+sed 's|127\.0\.0\.1|10.0.2.2|' .env > .env.android
+flutter run --dart-define-from-file=.env.android
+```
+
+iOS simulator host ağını paylaştığı için bu değişiklik gerekmez; aynı `.env`
+iOS'ta çalışır, Android emülatöründe çalışmaz. (`.env.*` gitignore kapsamındadır.)
+
+### Android SDK / JDK notu
+
+Gradle, JDK 25 ile `What went wrong: 25` hatası verir. JDK 17 gerekir:
+
+```bash
+brew install openjdk@17
+flutter config --jdk-dir /opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+```
+
 ## Veritabanı (Supabase yerel)
 
 ```bash

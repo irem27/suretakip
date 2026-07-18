@@ -8,4 +8,46 @@ class AppConstants {
 
   static const defaultCurrencyCode = 'TRY';
   static const defaultTimezone = 'Europe/Istanbul';
+
+  static const minimumPasswordLength = 8;
+  static const defaultRoundingIntervalMinutes = 1;
+  static const defaultMinimumChargeMinutes = 0;
+  static const serviceRoundingIntervalOptions = <int>[1, 5, 10, 15, 30];
+  static const serviceMinimumChargeOptions = <int>[0, 5, 10, 15, 30, 60];
+  static const maximumNameLength = 120;
+  static const historyQueryLimit = 200;
+  static const historyEarliestYear = 2020;
+  static const reportRankingLimit = 5;
+
+  static const businessesTable = 'businesses';
+  static const businessMembersTable = 'business_members';
+  static const customersTable = 'customers';
+  static const servicesTable = 'services';
+  static const productsTable = 'products';
+  static const inventoryMovementsTable = 'inventory_movements';
+  static const sessionsTable = 'sessions';
+  static const sessionItemsTable = 'session_items';
+  static const sessionTimeEntriesTable = 'session_time_entries';
+  static const completeOnboardingRpc = 'complete_onboarding';
+  static const createProductWithStockRpc = 'create_product_with_stock';
+  static const serverNowRpc = 'server_now';
+  static const startSessionRpc = 'start_session';
+  static const pauseSessionRpc = 'pause_session';
+  static const resumeSessionRpc = 'resume_session';
+  static const addProductToSessionRpc = 'add_product_to_session';
+  static const completeSessionRpc = 'complete_session';
+  static const cancelSessionRpc = 'cancel_session';
+  static const reportRevenueSummaryRpc = 'report_revenue_summary';
+  static const reportTopServicesRpc = 'report_top_services';
+  static const reportTopProductsRpc = 'report_top_products';
+  static const reportTopCustomersRpc = 'report_top_customers';
+  static const dashboardMetricsRpc = 'dashboard_metrics';
+
+  static const supportedCurrencyCodes = <String>['TRY', 'USD', 'EUR', 'GBP'];
+  static const supportedTimezones = <String>[
+    'Europe/Istanbul',
+    'Europe/London',
+    'Europe/Berlin',
+    'America/New_York',
+  ];
 }

@@ -18,7 +18,8 @@ class SupabaseInitializer {
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
       throw StateError(
         'SUPABASE_URL ve SUPABASE_ANON_KEY tanımlı değil. '
-        'Uygulamayı `--dart-define-from-file=.env` ile çalıştırın (bkz. README).',
+        'Uygulamayı `--dart-define-from-file=.env.staging` veya '
+        '`.env.production` ile çalıştırın (bkz. README).',
       );
     }
 

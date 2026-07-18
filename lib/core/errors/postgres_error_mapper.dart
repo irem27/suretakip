@@ -1,7 +1,22 @@
 import 'package:suretakip/core/errors/domain_exception.dart';
+import 'package:suretakip/core/errors/sensitive_data_sanitizer.dart';
 
 abstract final class PostgresErrorMapper {
   static DomainException map({
+    required String message,
+    String? code,
+    Object? cause,
+  }) => _mapSanitized(
+    message: message,
+    code: SensitiveDataSanitizer.sanitizePostgresCode(code),
+    cause: cause == null
+        ? null
+        : SensitiveDataSanitizer.sanitizedCause(
+            message: 'Veritabanı hata ayrıntısı maskelendi.',
+          ),
+  );
+
+  static DomainException _mapSanitized({
     required String message,
     String? code,
     Object? cause,
@@ -47,9 +62,31 @@ abstract final class PostgresErrorMapper {
   static String _extractErrorKey(String message) {
     final normalized = message.trim().toLowerCase();
     for (final key in _rpcErrorKeys) {
-      if (normalized == key || normalized.contains(key)) return key;
+      // Tam eşleşme ya da token-sınırlı eşleşme; çıplak substring değil.
+      // Böylece rastgele bir Postgres mesajında geçen bir kelime parçası
+      // yanlışlıkla iş-hatası koduna eşlenmez.
+      if (normalized == key || _containsToken(normalized, key)) return key;
     }
     return normalized;
+  }
+
+  static bool _containsToken(String haystack, String token) {
+    var index = haystack.indexOf(token);
+    while (index != -1) {
+      final beforeOk = index == 0 || !_isWordChar(haystack[index - 1]);
+      final after = index + token.length;
+      final afterOk = after == haystack.length || !_isWordChar(haystack[after]);
+      if (beforeOk && afterOk) return true;
+      index = haystack.indexOf(token, index + 1);
+    }
+    return false;
+  }
+
+  static bool _isWordChar(String char) {
+    final code = char.codeUnitAt(0);
+    final isDigit = code >= 0x30 && code <= 0x39;
+    final isLower = code >= 0x61 && code <= 0x7a;
+    return isDigit || isLower || char == '_';
   }
 
   static DomainException? _mapRpcError(String key, Object? cause) =>
@@ -71,6 +108,16 @@ abstract final class PostgresErrorMapper {
         ),
         'business_name_required' => ValidationException(
           'İşletme adı boş bırakılamaz.',
+          code: key,
+          cause: cause,
+        ),
+        'service_name_required' => ValidationException(
+          'Hizmet adı boş bırakılamaz.',
+          code: key,
+          cause: cause,
+        ),
+        'product_name_required' => ValidationException(
+          'Ürün adı boş bırakılamaz.',
           code: key,
           cause: cause,
         ),
@@ -144,17 +191,14 @@ abstract final class PostgresErrorMapper {
           code: key,
           cause: cause,
         ),
-        'already_completed' => ConflictException(
-          'Bu işlem daha önce tamamlanmış.',
-          code: key,
-          cause: cause,
-        ),
         _ => null,
       };
 
   static const _rpcErrorKeys = <String>{
     'authentication_required',
     'business_name_required',
+    'service_name_required',
+    'product_name_required',
     'business_not_active',
     'currency_mismatch',
     'customer_not_found',
@@ -171,6 +215,5 @@ abstract final class PostgresErrorMapper {
     'session_not_found',
     'session_not_open',
     'session_not_paused',
-    'already_completed',
   };
 }

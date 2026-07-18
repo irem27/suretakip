@@ -38,4 +38,21 @@ void main() {
 
     expect(exception, isA<ConflictException>());
   });
+
+  test('ham hata ayrıntısını ve güvenli olmayan kodu maskeler', () {
+    const sensitive =
+        'Bearer eyJhbGciOiJIUzI1NiJ9.secret user@example.com +905551112233';
+    final exception = PostgresErrorMapper.map(
+      message: 'DETAIL: $sensitive on public.users',
+      code: sensitive,
+      cause: StateError(sensitive),
+    );
+
+    expect(exception, isA<DatabaseException>());
+    expect(exception.code, isNull);
+    expect(exception.message, isNot(contains('user@example.com')));
+    expect(exception.toString(), isNot(contains('eyJhbGci')));
+    expect(exception.cause.toString(), isNot(contains('+905551112233')));
+    expect(exception.cause.toString(), 'Veritabanı hata ayrıntısı maskelendi.');
+  });
 }

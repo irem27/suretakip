@@ -36,6 +36,13 @@ migrate_working_dir/
 .env.*
 !.env.example
 
+# Android release imzalama sırları — ASLA commit edilmez
+key.properties
+android/key.properties
+*.jks
+*.keystore
+!android/key.properties.example
+
 # Symbolication related
 app.*.symbols
 

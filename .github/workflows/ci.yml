@@ -104,7 +104,10 @@ jobs:
       - name: Set up Supabase CLI
         uses: supabase/setup-cli@v2
         with:
-          version: 2.101.0
+          # config.toml'u üreten yerel CLI sürümüyle AYNI olmalı. 2.101.0 ile
+          # CI kırıldı: '[local_smtp]' anahtarı o sürümde yok (eski adı
+          # '[inbucket]'). Sürümü tahmin etme — `supabase --version` ile doğrula.
+          version: 2.109.1
 
       # Ubuntu runner Docker içerir. CLI kendi yerel Postgres konteynerini
       # başlattığı için ayrı bir service container veya uzak proje/.env gerekmez.

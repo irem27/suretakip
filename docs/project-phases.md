@@ -29,7 +29,15 @@ Yapılanlar:
 - `flutter test` başarılı
 - `flutter analyze` temiz
 
-## Faz 1 - Veritabanı ve Güvenlik Temeli
+## Faz 1 - Veritabanı ve Güvenlik Temeli (Tamamlandı - 2026-07-17)
+
+> **Güncelleme (2026-07-17):** Bu faz, aşağıdaki adımların ötesine geçen
+> production modeliyle (v2) tamamlandı: kuruş bazlı `bigint` para,
+> `owner/admin/staff` rolleri, `session_time_entries` zaman ledger'ı,
+> `inventory_movements` stok ledger'ı + cache trigger'ı, 6 transaction-safe
+> seans RPC'si ve 20 senaryoluk test paketi (`supabase/tests/rls_test.sql`).
+> Ayrıca tamamlama RPC'si Faz 6'ya bırakılmayıp DB tarafında şimdiden
+> implemente edildi. Detay: [database-design.md](database-design.md).
 
 Amaç: Supabase tarafında tüm tablo, index, constraint, RLS ve yetki modelini hazır etmek.
 
@@ -54,9 +62,9 @@ Adımlar:
 
 Çıkış kriteri:
 
-- Migration temiz uygulanır
-- RLS aktif ve policy testleri geçer
-- Owner/Manager/Employee rolleri beklenen izinleri verir
+- Migration temiz uygulanır ✅
+- RLS aktif ve policy testleri geçer ✅ (20/20)
+- Owner/Admin/Staff rolleri beklenen izinleri verir ✅ (güncellendi: 2026-07-17 — roller owner/admin/staff oldu)
 
 ## Faz 2 - Domain Çekirdeği ve Kontratlar
 
@@ -130,7 +138,9 @@ Adımlar:
 4. Form doğrulamaları:
    - ad zorunlu
    - dakika ücreti > 0
-5. roundingType seçeneklerini ekle (`exact`, `floor`, `ceil`; default `ceil`).
+5. Ücretlendirme alanlarını forma ekle: `rounding_interval_minutes` (>0) ve
+   `minimum_charge_minutes` (>=0). (güncellendi: 2026-07-17 — ~~exact/floor/ceil~~
+   yerine dakika aralığına yukarı yuvarlama modeli geldi)
 6. Silme yerine aktif/pasif yaklaşımı uygula.
 7. Riverpod provider/controller yapısını finalize et.
 
@@ -171,39 +181,36 @@ Adımlar (Customers):
 
 Amaç: Uygulamanın çekirdeği olan süreli işlem akışını tamamlamak.
 
-Adımlar:
+> **Güncelleme (2026-07-17):** DB tarafı (RPC'ler, zaman/stok ledger'ları,
+> atomik tamamlama) Faz 1'de implemente edildi. Bu faz artık ağırlıklı olarak
+> **Flutter entegrasyonu**dur: ekranlar bu RPC'leri çağırır, elle
+> insert/update yapmaz. Eski `paused_at`/`total_paused_seconds` modeli ve
+> "aynı ürün quantity artırır" kuralı kaldırıldı.
+
+Adımlar (güncellendi: 2026-07-17):
 
 1. Yeni işlem başlat ekranı:
    - müşteri seç/misafir
    - hizmet seç
    - opsiyonel not
-2. `sessions` kaydını snapshot alanlarla oluştur.
+2. Başlatmayı `start_session` RPC'sine bağla (snapshot'ları DB alır).
 3. Aktif işlem ekranı:
-   - canlı süre
+   - canlı süre (görsel timer; gerçek süre `session_time_entries`'ten)
    - canlı hizmet tutarı
    - ürünler toplamı
    - canlı genel toplam
-4. Duraklat/devam et akışını uygula (`paused_at`, `total_paused_seconds`).
-5. Ürün ekleme akışı:
+4. Duraklat/devam akışını `pause_session` / `resume_session` RPC'lerine bağla.
+5. Ürün ekleme akışı (`add_product_to_session` RPC):
    - arama
-   - adet artır/azalt
-   - aynı ürün eklenirse quantity artır
-6. `SessionPriceCalculator` servisini tamamla:
-   - activeDuration
-   - billableDuration
-   - chargedMinutes
-   - serviceTotal
-   - productsTotal
-   - grandTotal
-7. Tamamlama modalını oluştur.
-8. Tamamlama işlemini RPC/transaction ile atomik hale getir:
-   - endedAt
-   - chargedMinutes
-   - serviceTotal
-   - productsTotal
-   - grandTotal
-   - status = completed
-   - stok düşümü (trackStock = true)
+   - adet seçimi, opsiyonel satır indirimi
+   - aynı ürün tekrar eklenirse YENİ satır açılır (farklı fiyat/indirim desteklenir)
+6. `SessionPriceCalculator` domain servisini tamamla (UI'daki canlı tahmin için;
+   kesin hesap DB'de):
+   - activeDuration (aralıklardan)
+   - chargedMinutes (`ceil(dk/interval)*interval`, min. dakika uygulanır)
+   - serviceSubtotalMinor / productsSubtotalMinor / grandTotalMinor
+7. Tamamlama modalını oluştur (indirim + vergi girişi).
+8. Tamamlamayı `complete_session` RPC'sine bağla; iptal için `cancel_session`.
 
 Çıkış kriteri:
 

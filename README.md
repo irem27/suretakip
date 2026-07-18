@@ -10,29 +10,53 @@ canlı sayaçla ücretlendirir, işleme ürün ekler ve tutarı atomik olarak ka
 - Flutter SDK (Dart `^3.10.4`)
 - Supabase CLI + Docker (yerel veritabanı ve migration'lar için)
 
-## Yapılandırma (Supabase anahtarları)
+## Ortam yapılandırması (Supabase anahtarları)
 
 Uygulama, Supabase bağlantı bilgilerini **derleme zamanında** `--dart-define`
-ile alır; `.env` artık uygulama içine asset olarak paketlenmez.
+ile alır; env dosyaları uygulama içine asset olarak paketlenmez. Staging ve
+production birbirinden ayrı Supabase projeleri kullanmalıdır.
 
-1. Örnek dosyayı kopyalayın:
+1. Her ortam için örnek dosyayı kopyalayın:
    ```bash
-   cp .env.example .env
+   cp .env.example .env.staging
+   cp .env.example .env.production
    ```
-2. `.env` içini kendi Supabase projenizin değerleriyle doldurun:
+2. Dosyaları yalnızca ait oldukları Supabase projesinin değerleriyle doldurun:
    ```
    SUPABASE_URL=https://<proje-ref>.supabase.co
    SUPABASE_ANON_KEY=<anon-key>
    ```
 
-`.env` git tarafından yok sayılır (`.gitignore`); anahtarlar repoya girmez.
+`.env`, `.env.staging`, `.env.production` ve diğer `.env.*` dosyaları git
+tarafından yok sayılır; yalnızca güvenli placeholder içeren `.env.example`
+repoya girer. Ortam dosyalarına service-role anahtarı veya başka sunucu sırrı
+yazmayın.
 
 ## Çalıştırma
 
+Bağımlılıkları bir kez alın:
+
 ```bash
 flutter pub get
-flutter run --dart-define-from-file=.env
 ```
+
+Staging:
+
+```bash
+flutter run --dart-define-from-file=.env.staging
+flutter build appbundle --release --dart-define-from-file=.env.staging
+```
+
+Production:
+
+```bash
+flutter run --release --dart-define-from-file=.env.production
+flutter build appbundle --release --dart-define-from-file=.env.production
+```
+
+`flutter build ipa` ile iOS paketi üretilecekse aynı komutlara ilgili
+`--dart-define-from-file` argümanı eklenir; imzalama ayarları önce tamamlanmış
+olmalıdır.
 
 > `--dart-define-from-file` verilmezse uygulama başlangıçta anlaşılır bir hata
 > (`SUPABASE_URL ve SUPABASE_ANON_KEY tanımlı değil`) ile durur.
@@ -70,16 +94,38 @@ lib/
 supabase/
   migrations/   şema + RLS
   tests/        RLS senaryo testleri
-docs/           mimari, faz planı, uygulama yol haritası
+docs/           mimari, faz planı, gözlemlenebilirlik ve yayın belgeleri
 ```
 
 ## Yol haritası
 
-Fazlı plan ve mevcut durum için `docs/implementation-roadmap.md` ve kök
-dizindeki `PLAN.md` dosyalarına bakın.
+Fazlı plan ve mevcut durum için
+[`docs/implementation-roadmap.md`](docs/implementation-roadmap.md) dosyasına
+bakın.
+
+## Kalite kapıları (CI)
+
+`.github/workflows/ci.yml` her PR ve `main` push'unda şunları zorunlu kılar:
+
+- `dart format --set-exit-if-changed` (biçim)
+- `flutter analyze --fatal-infos` (statik analiz)
+- `flutter test --coverage` + **kapsam alt sınırı** (`MIN_COVERAGE`, şu an %52)
+- `supabase db reset` (tüm migration'lar temiz uygulanır)
+- **`supabase/tests/rls_test.sql`** — tenant izolasyonu, rol matrisi, seans
+  durum makinesi, stok ledger'ı, onboarding atomikliği ve rapor aggregate'leri
+
+> Kapsam kapısı bir *ratchet*'tir: hedef **%80**. Kapsam arttıkça
+> `MIN_COVERAGE` yükseltilmelidir (bugün: %56,7).
 
 ## Yayın öncesi (Faz 8)
 
-- [ ] Android release imzalama (`android/app/build.gradle.kts` hâlâ debug key ile imzalıyor)
+Tek sayfalık süreç için
+[`docs/release-checklist.md`](docs/release-checklist.md) dosyasını kullanın.
+
+- [ ] **Android release imzalama** — `android/app/build.gradle.kts` hâlâ debug
+      key ile imzalıyor. **Yayın engelleyicisi**: bu haliyle Play Store'a çıkılamaz.
+- [ ] Test kapsamını %80'e çıkar (açık: data katmanının kalanı, ekran testleri)
+- [ ] Rol farkındalıklı UI (staff'a owner/admin aksiyonları gösterilmemeli)
+- [ ] Şifre sıfırlama deep link (`redirectTo` + app link) ve yeni şifre ekranı
 - [ ] Uygulama ikonları ve splash
 - [ ] Store metaverileri

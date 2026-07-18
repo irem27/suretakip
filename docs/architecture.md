@@ -1,5 +1,11 @@
 # Menü Sayaç - Genel Mimari
 
+> **Güncelleme (2026-07-17):** Veri katmanı production modeline (v2) geçirildi.
+> Değişenler: para artık kuruş bazlı `bigint` (`*_minor`), roller `owner/admin/staff`,
+> zaman takibi `session_time_entries` ledger'ı, stok `inventory_movements` ledger'ı,
+> seans yaşam döngüsü yalnızca RPC üzerinden. Detay: [database-design.md](database-design.md).
+> Bu dokümanda güncellenen bölümler "(güncellendi: 2026-07-17)" ile işaretlidir.
+
 Bu doküman, projeyi iki veya daha fazla geliştirici ile tutarlı şekilde ilerletmek için temel mimari kararları ve çalışma kurallarını tanımlar.
 
 ## 1) Mimari Yaklaşım
@@ -152,11 +158,15 @@ Kural:
 
 ## 8) Modelleme Kuralları
 
+(güncellendi: 2026-07-17)
+
 - Domain entity ve modelde immutable yaklaşım.
 - Freezed + json_serializable standartları uygulanır.
-- ID tipleri UUID.
-- Fiyat alanları PostgreSQL tarafında `numeric(12,2)`.
-- Dart tarafında para hesapları merkezi utility/value object ile yapılır.
+- ID tipleri UUID (`gen_random_uuid()`).
+- Para alanları PostgreSQL tarafında en küçük birim (kuruş) `bigint` olarak tutulur
+  (`unit_price_minor`, `grand_total_minor` vb.); her para snapshot'ında ISO 4217
+  `currency_code` bulunur. ~~`numeric(12,2)`~~ kullanımı kaldırıldı.
+- Dart tarafında para hesapları merkezi value object ile yapılır (int minor bazlı).
 
 ## 9) İş Kuralı Yerleşimi
 
@@ -167,10 +177,18 @@ Kural:
 
 ## 10) Supabase ve SQL Sınırları
 
-- Tablolar: businesses, business_members, customers, services, products, sessions, session_items.
-- RLS tüm tablolarda aktif.
-- Yetki kontrolü business üyeliği üzerinden yapılır.
-- Kritik tamamla işlemleri (stok düşümü + toplam kaydı) atomik şekilde RPC/transaction ile yapılır.
+(güncellendi: 2026-07-17)
+
+- Tablolar: businesses, business_members, customers, services, products, sessions,
+  session_time_entries, session_items, inventory_movements.
+- Roller: `owner / admin / staff` (~~manager/employee~~ adlandırması kaldırıldı).
+- RLS tüm tenant tablolarında aktif; yetki kontrolü business üyeliği üzerinden
+  `security definer` helper fonksiyonlarla yapılır.
+- Seans yaşam döngüsü yalnızca RPC'lerle yürür (start/pause/resume/add_product/
+  complete/cancel_session) — tümü tek transaction, FOR UPDATE kilitli.
+- Stok: append-only `inventory_movements` ledger'ı kaynak; `products.stock_quantity`
+  trigger'ın güncellediği cache.
+- Bu maddelerin tamamı `supabase/migrations/` altında uygulanmış durumdadır.
 
 ## 11) Kodlama Standartları
 
@@ -213,7 +231,7 @@ Her PR için minimum gereksinim:
 
 Bu dokümandan sonra ekip olarak şu sırayla ilerlenir:
 
-1. Supabase migration + RLS dosyaları
+1. ~~Supabase migration + RLS dosyaları~~ ✅ Tamamlandı (2026-07-17, `supabase/migrations/` + 20 senaryoluk test paketi)
 2. Domain entity/model ve repository kontratları
 3. Services CRUD
 4. Products CRUD

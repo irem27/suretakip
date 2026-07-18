@@ -24,8 +24,9 @@ class DashboardRepositoryImpl implements DashboardRepository {
           throw const DatabaseException('Dashboard metrikleri alınamadı.');
         }
         final row = rows.first;
+        // RPC ayrıca server_now döndürür; dashboard onu kullanmadığı için
+        // modele taşınmıyor. Canlı sayaç ayrı server_now() RPC'siyle çalışır.
         return DashboardMetrics(
-          serverNow: DateTime.parse(row['server_now'] as String).toUtc(),
           activeSessionCount: _int(row['active_session_count']),
           todayCompletedCount: _int(row['today_completed_count']),
           todayRevenue: Money(

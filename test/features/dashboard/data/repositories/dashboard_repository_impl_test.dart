@@ -12,7 +12,6 @@ void main() {
     expect(metrics.todayCompletedCount, 4);
     expect(metrics.todayRevenue.minorUnits, 12500);
     expect(metrics.todayRevenue.currencyCode, 'TRY');
-    expect(metrics.serverNow.isUtc, isTrue);
   });
 
   test('eksik sayısal metrikler güvenli sıfıra eşlenir', () async {

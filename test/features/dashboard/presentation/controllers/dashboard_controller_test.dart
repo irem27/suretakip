@@ -50,7 +50,6 @@ class _FakeDashboardRepository implements DashboardRepository {
   Future<DashboardMetrics> getMetrics({required String businessId}) async {
     this.businessId = businessId;
     return DashboardMetrics(
-      serverNow: DateTime.utc(2026, 7, 18, 10),
       activeSessionCount: 2,
       todayCompletedCount: 3,
       todayRevenue: Money(minorUnits: 12500, currencyCode: 'TRY'),

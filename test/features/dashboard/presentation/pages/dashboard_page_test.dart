@@ -53,7 +53,6 @@ class _FakeDashboardRepository implements DashboardRepository {
   @override
   Future<DashboardMetrics> getMetrics({required String businessId}) async =>
       DashboardMetrics(
-        serverNow: DateTime.utc(2026, 7, 18, 10),
         activeSessionCount: 2,
         todayCompletedCount: 3,
         todayRevenue: Money(minorUnits: 12500, currencyCode: 'TRY'),

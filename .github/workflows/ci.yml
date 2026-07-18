@@ -47,7 +47,7 @@ jobs:
       # Eski %58.2 ile yeni %48.0 aynı şeyi ölçmüyor.
       - name: Enforce coverage floor
         env:
-          MIN_COVERAGE: "45"
+          MIN_COVERAGE: "65"
         run: |
           pct=$(awk -F: '/^DA:/{total++; if ($2 ~ /,[1-9]/) covered++}
                          END {if (total == 0) print "0";

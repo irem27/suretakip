@@ -265,12 +265,15 @@ class _ProductCard extends StatelessWidget {
                         ? 'Stok: ${product.stockQuantity}'
                         : 'Stok takibi kapalı',
                   ),
-                  Semantics(
-                    label: '${product.name} aktif durumu',
-                    toggled: product.isActive,
-                    child: Switch.adaptive(
-                      value: product.isActive,
-                      onChanged: isUpdating ? null : onStatusChanged,
+                  // MergeSemantics şart: onsuz Switch'in kendi düğümü adsız kalır.
+                  MergeSemantics(
+                    child: Semantics(
+                      label: '${product.name} aktif durumu',
+                      toggled: product.isActive,
+                      child: Switch.adaptive(
+                        value: product.isActive,
+                        onChanged: isUpdating ? null : onStatusChanged,
+                      ),
                     ),
                   ),
                 ],

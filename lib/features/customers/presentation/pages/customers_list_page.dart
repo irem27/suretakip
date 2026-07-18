@@ -193,12 +193,15 @@ class _CustomerCard extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   CustomerStatusChip(isActive: customer.isActive),
-                  Semantics(
-                    label: '${customer.name} aktif durumu',
-                    toggled: customer.isActive,
-                    child: Switch.adaptive(
-                      value: customer.isActive,
-                      onChanged: isUpdating ? null : onStatusChanged,
+                  // MergeSemantics şart: onsuz Switch'in kendi düğümü adsız kalır.
+                  MergeSemantics(
+                    child: Semantics(
+                      label: '${customer.name} aktif durumu',
+                      toggled: customer.isActive,
+                      child: Switch.adaptive(
+                        value: customer.isActive,
+                        onChanged: isUpdating ? null : onStatusChanged,
+                      ),
                     ),
                   ),
                 ],

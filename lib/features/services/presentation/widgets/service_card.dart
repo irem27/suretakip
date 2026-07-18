@@ -125,12 +125,17 @@ class ServiceCard extends StatelessWidget {
                       service.isActive ? 'Aktif' : 'Pasif',
                       style: Theme.of(context).textTheme.labelMedium,
                     ),
-                    Semantics(
-                      label: '${service.name} aktif durumu',
-                      toggled: service.isActive,
-                      child: Switch.adaptive(
-                        value: service.isActive,
-                        onChanged: isUpdating ? null : onStatusChanged,
+                    // MergeSemantics şart: onsuz etiket ayrı bir düğümde kalır
+                    // ve Switch'in kendi düğümü ADSIZ olur; ekran okuyucu
+                    // yalnızca "anahtar" der, hangi hizmet olduğunu söylemez.
+                    MergeSemantics(
+                      child: Semantics(
+                        label: '${service.name} aktif durumu',
+                        toggled: service.isActive,
+                        child: Switch.adaptive(
+                          value: service.isActive,
+                          onChanged: isUpdating ? null : onStatusChanged,
+                        ),
                       ),
                     ),
                   ],

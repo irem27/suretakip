@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/router/app_routes.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/features/services/domain/entities/service.dart';
@@ -33,8 +34,13 @@ class _ServicesListPageState extends ConsumerState<ServicesListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final listState = ref.watch(servicesListControllerProvider);
+    final scope = ref.watch(activeBusinessScopeProvider);
+    final listProvider = servicesListControllerProvider(scope);
+    final listState = ref.watch(listProvider);
     final formState = ref.watch(serviceFormControllerProvider);
+    final canManageCatalog =
+        ref.watch(businessCapabilitiesProvider).valueOrNull?.canManageCatalog ??
+        false;
     ref.listen(serviceFormControllerProvider, (_, next) {
       if (!next.hasError) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -58,17 +64,18 @@ class _ServicesListPageState extends ConsumerState<ServicesListPage> {
         ),
         title: const Text('Hizmetler'),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.pushNamed(AppRouteNames.serviceCreate),
-        backgroundColor: Theme.of(context).colorScheme.secondary,
-        foregroundColor: Theme.of(context).colorScheme.onSecondary,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Yeni Hizmet'),
-      ),
+      floatingActionButton: canManageCatalog
+          ? FloatingActionButton.extended(
+              onPressed: () => context.pushNamed(AppRouteNames.serviceCreate),
+              backgroundColor: Theme.of(context).colorScheme.secondary,
+              foregroundColor: Theme.of(context).colorScheme.onSecondary,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Yeni Hizmet'),
+            )
+          : null,
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () =>
-              ref.read(servicesListControllerProvider.notifier).refresh(),
+          onRefresh: () => ref.read(listProvider.notifier).refresh(),
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
@@ -77,9 +84,8 @@ class _ServicesListPageState extends ConsumerState<ServicesListPage> {
                   searchController: _searchController,
                   queryChanged: (value) => setState(() => _query = value),
                   state: listState.valueOrNull,
-                  onFilterChanged: (filter) => ref
-                      .read(servicesListControllerProvider.notifier)
-                      .setFilter(filter),
+                  onFilterChanged: (filter) =>
+                      ref.read(listProvider.notifier).setFilter(filter),
                 ),
               ),
               ...listState.when(
@@ -98,9 +104,7 @@ class _ServicesListPageState extends ConsumerState<ServicesListPage> {
                         error,
                         'Hizmetler yüklenemedi. Lütfen tekrar deneyin.',
                       ),
-                      onRetry: () => ref
-                          .read(servicesListControllerProvider.notifier)
-                          .refresh(),
+                      onRetry: () => ref.read(listProvider.notifier).refresh(),
                       padding: const EdgeInsets.all(32),
                       iconSize: 52,
                     ),
@@ -137,7 +141,9 @@ class _ServicesListPageState extends ConsumerState<ServicesListPage> {
                               AppRouteNames.serviceDetail,
                               pathParameters: {'serviceId': service.id},
                             ),
-                            onStatusChanged: (value) => _toggle(service, value),
+                            onStatusChanged: canManageCatalog
+                                ? (value) => _toggle(service, value)
+                                : null,
                           );
                         },
                       ),

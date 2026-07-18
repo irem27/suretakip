@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:intl/intl.dart';
 import 'package:suretakip/app/router/app_routes.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
@@ -17,20 +18,24 @@ class ProductDetailPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(productDetailProvider(productId));
+    final canManageCatalog =
+        ref.watch(businessCapabilitiesProvider).valueOrNull?.canManageCatalog ??
+        false;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ürün Detayı'),
         actions: [
-          TextButton.icon(
-            onPressed: detail.hasValue
-                ? () => context.pushNamed(
-                    AppRouteNames.productEdit,
-                    pathParameters: {'productId': productId},
-                  )
-                : null,
-            icon: const Icon(Icons.edit_outlined),
-            label: const Text('Düzenle'),
-          ),
+          if (canManageCatalog)
+            TextButton.icon(
+              onPressed: detail.hasValue
+                  ? () => context.pushNamed(
+                      AppRouteNames.productEdit,
+                      pathParameters: {'productId': productId},
+                    )
+                  : null,
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('Düzenle'),
+            ),
         ],
       ),
       body: SafeArea(
@@ -45,7 +50,8 @@ class ProductDetailPage extends ConsumerWidget {
             ),
             onRetry: () => ref.invalidate(productDetailProvider(productId)),
           ),
-          data: (product) => _Content(product: product),
+          data: (product) =>
+              _Content(product: product, canManageCatalog: canManageCatalog),
         ),
       ),
     );
@@ -53,9 +59,10 @@ class ProductDetailPage extends ConsumerWidget {
 }
 
 class _Content extends ConsumerWidget {
-  const _Content({required this.product});
+  const _Content({required this.product, required this.canManageCatalog});
 
   final Product product;
+  final bool canManageCatalog;
 
   Future<void> _toggle(BuildContext context, WidgetRef ref) async {
     final willActivate = !product.isActive;
@@ -142,16 +149,19 @@ class _Content extends ConsumerWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        OutlinedButton.icon(
-          onPressed: submitState.isLoading ? null : () => _toggle(context, ref),
-          icon: Icon(
-            product.isActive
-                ? Icons.visibility_off_outlined
-                : Icons.visibility_outlined,
+        if (canManageCatalog) const SizedBox(height: 16),
+        if (canManageCatalog)
+          OutlinedButton.icon(
+            onPressed: submitState.isLoading
+                ? null
+                : () => _toggle(context, ref),
+            icon: Icon(
+              product.isActive
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+            ),
+            label: Text(product.isActive ? 'Pasife Al' : 'Aktifleştir'),
           ),
-          label: Text(product.isActive ? 'Pasife Al' : 'Aktifleştir'),
-        ),
       ],
     );
   }

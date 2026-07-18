@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/core/domain/domain_enums.dart';
+import 'package:suretakip/features/businesses/domain/entities/business_capabilities.dart';
 import 'package:suretakip/features/services/domain/entities/service.dart';
 import 'package:suretakip/features/services/presentation/controllers/services_controllers.dart';
 import 'package:suretakip/features/services/presentation/pages/services_list_page.dart';
@@ -111,6 +114,26 @@ void main() {
 
     expect(listController.refreshCount, 1);
   });
+
+  for (final role in [MemberRole.owner, MemberRole.admin]) {
+    testWidgets('${role.name} katalog yazma aksiyonlarını görür', (
+      tester,
+    ) async {
+      await _pump(tester, services: [_service()], role: role);
+
+      expect(find.text('Yeni Hizmet'), findsOneWidget);
+      expect(tester.widget<Switch>(find.byType(Switch)).onChanged, isNotNull);
+    });
+  }
+
+  testWidgets('staff ekleme aksiyonunu görmez ve anahtar devre dışıdır', (
+    tester,
+  ) async {
+    await _pump(tester, services: [_service()], role: MemberRole.staff);
+
+    expect(find.text('Yeni Hizmet'), findsNothing);
+    expect(tester.widget<Switch>(find.byType(Switch)).onChanged, isNull);
+  });
 }
 
 Future<void> _pump(
@@ -118,12 +141,16 @@ Future<void> _pump(
   List<Service>? services,
   _ServicesListController? listController,
   _ServiceFormController? formController,
+  MemberRole role = MemberRole.owner,
 }) async {
   final effectiveList = listController ?? _ServicesListController(services!);
   final effectiveForm = formController ?? _ServiceFormController();
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        businessCapabilitiesProvider.overrideWithValue(
+          AsyncData(BusinessCapabilities.forRole(role)),
+        ),
         servicesListControllerProvider.overrideWith(() => effectiveList),
         serviceFormControllerProvider.overrideWith(() => effectiveForm),
       ],
@@ -146,7 +173,7 @@ class _ServicesListController extends ServicesListController {
   int refreshCount = 0;
 
   @override
-  Future<ServicesListState> build() async {
+  Future<ServicesListState> build(BusinessScope scope) async {
     if (error != null) throw error!;
     return ServicesListState(
       services: services,

@@ -14,7 +14,7 @@ class ServiceCard extends StatelessWidget {
 
   final Service service;
   final VoidCallback onTap;
-  final ValueChanged<bool> onStatusChanged;
+  final ValueChanged<bool>? onStatusChanged;
   final bool isUpdating;
 
   @override

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/router/app_routes.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
@@ -26,7 +27,9 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final listState = ref.watch(customersListControllerProvider);
+    final scope = ref.watch(activeBusinessScopeProvider);
+    final listProvider = customersListControllerProvider(scope);
+    final listState = ref.watch(listProvider);
     final formState = ref.watch(customerFormControllerProvider);
     ref.listen(customerFormControllerProvider, (_, next) {
       if (!next.hasError) return;
@@ -50,8 +53,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       ),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () =>
-              ref.read(customersListControllerProvider.notifier).refresh(),
+          onRefresh: () => ref.read(listProvider.notifier).refresh(),
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
@@ -60,9 +62,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
                   child: TextField(
                     controller: _searchController,
-                    onChanged: ref
-                        .read(customersListControllerProvider.notifier)
-                        .setQuery,
+                    onChanged: ref.read(listProvider.notifier).setQuery,
                     decoration: const InputDecoration(
                       hintText: 'Müşteri adı, telefon veya e-posta ara',
                       prefixIcon: Icon(Icons.search_rounded),
@@ -86,9 +86,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                         error,
                         'Müşteriler yüklenemedi. Lütfen tekrar deneyin.',
                       ),
-                      onRetry: () => ref
-                          .read(customersListControllerProvider.notifier)
-                          .refresh(),
+                      onRetry: () => ref.read(listProvider.notifier).refresh(),
                       padding: const EdgeInsets.all(32),
                       iconSize: 52,
                     ),

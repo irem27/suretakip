@@ -13,7 +13,9 @@ void main() {
     final container = _container(repository);
     addTearDown(container.dispose);
 
-    final state = await container.read(customersListControllerProvider.future);
+    final state = await container.read(
+      customersListControllerProvider(_scope).future,
+    );
 
     expect(state.customers, hasLength(1));
     expect(repository.businessId, 'business-1');
@@ -34,13 +36,18 @@ void main() {
     );
     final container = _container(repository);
     addTearDown(container.dispose);
-    await container.read(customersListControllerProvider.future);
+    final provider = customersListControllerProvider(_scope);
+    final subscription = container.listen(
+      provider,
+      (_, _) {},
+      fireImmediately: true,
+    );
+    addTearDown(subscription.close);
+    await container.read(provider.future);
 
-    container
-        .read(customersListControllerProvider.notifier)
-        .setQuery('example');
+    container.read(provider.notifier).setQuery('example');
 
-    final state = container.read(customersListControllerProvider).requireValue;
+    final state = container.read(provider).requireValue;
     expect(state.visibleCustomers.single.id, 'customer-2');
   });
 
@@ -78,6 +85,8 @@ void main() {
     expect(repository.updatedCustomer, isNull);
   });
 }
+
+const BusinessScope _scope = (businessId: 'business-1', generation: 0);
 
 ProviderContainer _container(_FakeCustomersRepository repository) =>
     ProviderContainer(

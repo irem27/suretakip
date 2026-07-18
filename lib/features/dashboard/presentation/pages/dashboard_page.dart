@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/app/providers/business_selection_controller.dart';
 import 'package:suretakip/app/router/app_routes.dart';
 import 'package:suretakip/core/constants/app_constants.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
@@ -23,9 +24,20 @@ class DashboardPage extends ConsumerWidget {
     final currentUser = ref.watch(currentUserProvider);
     final signOutState = ref.watch(signOutControllerProvider);
     final colorScheme = Theme.of(context).colorScheme;
+    final scope = ref.watch(activeBusinessScopeProvider);
+    final dashboardProvider = dashboardControllerProvider(scope);
+    final sessionsProvider = sessionsListControllerProvider(scope);
     final openSessions = ref.watch(openSessionsProvider);
-    final dashboardMetrics = ref.watch(dashboardControllerProvider);
-    final allSessions = ref.watch(sessionsListControllerProvider);
+    final dashboardMetrics = ref.watch(dashboardProvider);
+    final allSessions = ref.watch(sessionsProvider);
+    final businesses =
+        ref
+            .watch(userBusinessesProvider)
+            .valueOrNull
+            ?.where((business) => business.isActive)
+            .toList(growable: false) ??
+        const [];
+    final activeBusiness = ref.watch(activeBusinessProvider);
     final businessTimezone =
         ref.watch(activeBusinessProvider)?.timezone ??
         AppConstants.defaultTimezone;
@@ -78,6 +90,30 @@ class DashboardPage extends ConsumerWidget {
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
+            if (businesses.length > 1 && activeBusiness != null) ...[
+              const SizedBox(height: 20),
+              DropdownButtonFormField<String>(
+                key: ValueKey('business-switcher-${activeBusiness.id}'),
+                initialValue: activeBusiness.id,
+                decoration: const InputDecoration(
+                  labelText: 'Aktif işletme',
+                  prefixIcon: Icon(Icons.storefront_outlined),
+                ),
+                items: [
+                  for (final business in businesses)
+                    DropdownMenuItem(
+                      value: business.id,
+                      child: Text(business.name),
+                    ),
+                ],
+                onChanged: (businessId) {
+                  if (businessId == null) return;
+                  ref
+                      .read(businessSelectionControllerProvider.notifier)
+                      .selectBusiness(businessId);
+                },
+              ),
+            ],
             const SizedBox(height: 24),
             LayoutBuilder(
               builder: (context, constraints) {
@@ -154,8 +190,7 @@ class DashboardPage extends ConsumerWidget {
                 child: AppErrorState(
                   error: dashboardMetrics.error!,
                   fallbackMessage: 'Ana sayfa metrikleri yüklenemedi.',
-                  onRetry: () =>
-                      ref.read(dashboardControllerProvider.notifier).refresh(),
+                  onRetry: () => ref.read(dashboardProvider.notifier).refresh(),
                   padding: const EdgeInsets.all(20),
                   iconSize: 40,
                 ),
@@ -181,9 +216,8 @@ class DashboardPage extends ConsumerWidget {
                 ),
                 const Spacer(),
                 IconButton(
-                  onPressed: () => ref
-                      .read(sessionsListControllerProvider.notifier)
-                      .refresh(),
+                  onPressed: () =>
+                      ref.read(sessionsProvider.notifier).refresh(),
                   icon: const Icon(Icons.refresh_rounded),
                   tooltip: 'Aktif işlemleri yenile',
                 ),
@@ -201,9 +235,7 @@ class DashboardPage extends ConsumerWidget {
                 child: AppErrorState(
                   error: error,
                   fallbackMessage: 'Aktif işlemler yüklenemedi.',
-                  onRetry: () => ref
-                      .read(sessionsListControllerProvider.notifier)
-                      .refresh(),
+                  onRetry: () => ref.read(sessionsProvider.notifier).refresh(),
                   padding: const EdgeInsets.all(20),
                   iconSize: 40,
                 ),
@@ -332,9 +364,7 @@ class DashboardPage extends ConsumerWidget {
                 child: AppErrorState(
                   error: error,
                   fallbackMessage: 'Son tamamlanan işlemler yüklenemedi.',
-                  onRetry: () => ref
-                      .read(sessionsListControllerProvider.notifier)
-                      .refresh(),
+                  onRetry: () => ref.read(sessionsProvider.notifier).refresh(),
                   padding: const EdgeInsets.all(20),
                   iconSize: 40,
                 ),

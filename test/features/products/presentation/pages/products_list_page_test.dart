@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/features/businesses/domain/entities/business_capabilities.dart';
 import 'package:suretakip/features/products/domain/entities/product.dart';
 import 'package:suretakip/features/products/presentation/controllers/products_controllers.dart';
 import 'package:suretakip/features/products/presentation/pages/products_list_page.dart';
@@ -130,6 +132,7 @@ Future<void> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        businessCapabilitiesProvider.overrideWithValue(_managerCapabilities),
         productsListControllerProvider.overrideWith(() => effectiveList),
         productFormControllerProvider.overrideWith(() => effectiveForm),
       ],
@@ -138,6 +141,15 @@ Future<void> _pump(
   );
   await tester.pumpAndSettle();
 }
+
+const _managerCapabilities = AsyncData(
+  BusinessCapabilities(
+    canManageCatalog: true,
+    canManageMembers: true,
+    canEditBusinessSettings: true,
+    canCancelCompletedSession: true,
+  ),
+);
 
 class _ProductsListController extends ProductsListController {
   _ProductsListController(this.products) : error = null;
@@ -152,7 +164,7 @@ class _ProductsListController extends ProductsListController {
   int refreshCount = 0;
 
   @override
-  Future<ProductsListState> build() async {
+  Future<ProductsListState> build(BusinessScope scope) async {
     if (error != null) throw error!;
     return ProductsListState(
       products: products,

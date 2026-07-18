@@ -42,7 +42,8 @@ final class HistoryState {
   }
 }
 
-class HistoryController extends AsyncNotifier<HistoryState> {
+class HistoryController
+    extends AutoDisposeFamilyAsyncNotifier<HistoryState, BusinessScope> {
   DateTime? _firstDate;
   DateTime? _lastDate;
   DateTime? _serverLocalDate;
@@ -51,9 +52,13 @@ class HistoryController extends AsyncNotifier<HistoryState> {
   var _status = HistoryStatusFilter.all;
   List<Customer>? _customers;
   List<Service>? _services;
+  late BusinessScope _scope;
 
   @override
-  Future<HistoryState> build() => _load();
+  Future<HistoryState> build(BusinessScope scope) {
+    _scope = scope;
+    return _load();
+  }
 
   Future<void> refresh() => _reload();
 
@@ -84,8 +89,9 @@ class HistoryController extends AsyncNotifier<HistoryState> {
   }
 
   Future<HistoryState> _load() async {
-    final business = ref.watch(activeBusinessProvider);
-    if (business == null) {
+    final businessId = _scope.businessId;
+    final business = ref.read(activeBusinessProvider);
+    if (businessId == null || business == null || business.id != businessId) {
       final now = DateTime(AppConstants.historyEarliestYear);
       return HistoryState(
         sessions: const [],
@@ -159,7 +165,7 @@ class HistoryController extends AsyncNotifier<HistoryState> {
   }
 }
 
-final historyControllerProvider =
-    AsyncNotifierProvider<HistoryController, HistoryState>(
+final historyControllerProvider = AsyncNotifierProvider.autoDispose
+    .family<HistoryController, HistoryState, BusinessScope>(
       HistoryController.new,
     );

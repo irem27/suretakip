@@ -28,11 +28,16 @@ final class ProductsListState {
   );
 }
 
-class ProductsListController extends AsyncNotifier<ProductsListState> {
+class ProductsListController
+    extends AutoDisposeFamilyAsyncNotifier<ProductsListState, BusinessScope> {
   var _filter = ProductStatusFilter.all;
+  late BusinessScope _scope;
 
   @override
-  Future<ProductsListState> build() => _load();
+  Future<ProductsListState> build(BusinessScope scope) {
+    _scope = scope;
+    return _load();
+  }
 
   Future<void> refresh() async {
     state = const AsyncLoading<ProductsListState>().copyWithPrevious(state);
@@ -47,14 +52,14 @@ class ProductsListController extends AsyncNotifier<ProductsListState> {
   }
 
   Future<ProductsListState> _load() async {
-    final business = ref.watch(activeBusinessProvider);
-    if (business == null) {
+    final businessId = _scope.businessId;
+    if (businessId == null) {
       return ProductsListState(products: const [], filter: _filter);
     }
     final products = await ref
         .watch(productsRepositoryProvider)
         .getProducts(
-          businessId: business.id,
+          businessId: businessId,
           includeInactive: _filter != ProductStatusFilter.active,
         );
     return ProductsListState(products: products, filter: _filter);
@@ -70,7 +75,9 @@ class ProductFormController extends AsyncNotifier<void> {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       created = await ref.read(productsRepositoryProvider).createProduct(input);
-      ref.invalidate(productsListControllerProvider);
+      ref.invalidate(
+        productsListControllerProvider(ref.read(activeBusinessScopeProvider)),
+      );
     });
     return state.hasError ? null : created;
   }
@@ -82,7 +89,9 @@ class ProductFormController extends AsyncNotifier<void> {
       updated = await ref
           .read(productsRepositoryProvider)
           .updateProduct(product);
-      ref.invalidate(productsListControllerProvider);
+      ref.invalidate(
+        productsListControllerProvider(ref.read(activeBusinessScopeProvider)),
+      );
       ref.invalidate(productDetailProvider(product.id));
     });
     return state.hasError ? null : updated;
@@ -94,15 +103,17 @@ class ProductFormController extends AsyncNotifier<void> {
       await ref
           .read(productsRepositoryProvider)
           .setProductActive(productId, isActive: isActive);
-      ref.invalidate(productsListControllerProvider);
+      ref.invalidate(
+        productsListControllerProvider(ref.read(activeBusinessScopeProvider)),
+      );
       ref.invalidate(productDetailProvider(productId));
     });
     return !state.hasError;
   }
 }
 
-final productsListControllerProvider =
-    AsyncNotifierProvider<ProductsListController, ProductsListState>(
+final productsListControllerProvider = AsyncNotifierProvider.autoDispose
+    .family<ProductsListController, ProductsListState, BusinessScope>(
       ProductsListController.new,
     );
 

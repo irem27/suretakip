@@ -17,7 +17,9 @@ class HistoryPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final history = ref.watch(historyControllerProvider);
+    final scope = ref.watch(activeBusinessScopeProvider);
+    final historyProvider = historyControllerProvider(scope);
+    final history = ref.watch(historyProvider);
     final timezone =
         ref.watch(activeBusinessProvider)?.timezone ??
         AppConstants.defaultTimezone;
@@ -26,8 +28,7 @@ class HistoryPage extends ConsumerWidget {
         title: const Text('İşlem Geçmişi'),
         actions: [
           IconButton(
-            onPressed: () =>
-                ref.read(historyControllerProvider.notifier).refresh(),
+            onPressed: () => ref.read(historyProvider.notifier).refresh(),
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Geçmişi yenile',
           ),
@@ -40,12 +41,10 @@ class HistoryPage extends ConsumerWidget {
           error: (error, _) => AppErrorState(
             error: error,
             fallbackMessage: 'İşlem geçmişi yüklenemedi.',
-            onRetry: () =>
-                ref.read(historyControllerProvider.notifier).refresh(),
+            onRetry: () => ref.read(historyProvider.notifier).refresh(),
           ),
           data: (data) => RefreshIndicator.adaptive(
-            onRefresh: () =>
-                ref.read(historyControllerProvider.notifier).refresh(),
+            onRefresh: () => ref.read(historyProvider.notifier).refresh(),
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -117,7 +116,8 @@ class _HistoryFilters extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.read(historyControllerProvider.notifier);
+    final scope = ref.watch(activeBusinessScopeProvider);
+    final controller = ref.read(historyControllerProvider(scope).notifier);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -242,8 +242,9 @@ class _HistoryFilters extends ConsumerWidget {
       saveText: 'Uygula',
     );
     if (selected == null) return;
+    final scope = ref.read(activeBusinessScopeProvider);
     await ref
-        .read(historyControllerProvider.notifier)
+        .read(historyControllerProvider(scope).notifier)
         .setDates(selected.start, selected.end);
   }
 }

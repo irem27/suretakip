@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
@@ -93,7 +93,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         name: AppRouteNames.serviceCreate,
         path: AppRoutes.serviceCreate,
-        builder: (context, state) => const ServiceFormPage(),
+        builder: (context, state) =>
+            const _CatalogWriteGuard(child: ServiceFormPage()),
       ),
       GoRoute(
         name: AppRouteNames.serviceDetail,
@@ -105,8 +106,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         name: AppRouteNames.serviceEdit,
         path: AppRoutes.serviceEdit,
-        builder: (context, state) =>
-            ServiceFormPage(serviceId: state.pathParameters['serviceId'] ?? ''),
+        builder: (context, state) => _CatalogWriteGuard(
+          child: ServiceFormPage(
+            serviceId: state.pathParameters['serviceId'] ?? '',
+          ),
+        ),
       ),
       GoRoute(
         name: AppRouteNames.definitions,
@@ -121,7 +125,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         name: AppRouteNames.productCreate,
         path: AppRoutes.productCreate,
-        builder: (context, state) => const ProductFormPage(),
+        builder: (context, state) =>
+            const _CatalogWriteGuard(child: ProductFormPage()),
       ),
       GoRoute(
         name: AppRouteNames.productDetail,
@@ -133,8 +138,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         name: AppRouteNames.productEdit,
         path: AppRoutes.productEdit,
-        builder: (context, state) =>
-            ProductFormPage(productId: state.pathParameters['productId'] ?? ''),
+        builder: (context, state) => _CatalogWriteGuard(
+          child: ProductFormPage(
+            productId: state.pathParameters['productId'] ?? '',
+          ),
+        ),
       ),
       GoRoute(
         name: AppRouteNames.customers,
@@ -241,3 +249,53 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
   return router;
 });
+
+class _CatalogWriteGuard extends ConsumerWidget {
+  const _CatalogWriteGuard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => ref
+      .watch(businessCapabilitiesProvider)
+      .when(
+        data: (capabilities) =>
+            capabilities.canManageCatalog ? child : const _NoPermissionPage(),
+        loading: () => const Scaffold(
+          body: Center(child: CircularProgressIndicator.adaptive()),
+        ),
+        error: (_, _) => const _NoPermissionPage(),
+      );
+}
+
+class _NoPermissionPage extends StatelessWidget {
+  const _NoPermissionPage();
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Yetkiniz yok')),
+    body: SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_outline_rounded, size: 56),
+              const SizedBox(height: 16),
+              const Text(
+                'Bu işlem için işletme yöneticisi yetkisi gerekiyor.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: () => context.go(AppRoutes.dashboard),
+                child: const Text('Ana sayfaya dön'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/core/value_objects/money.dart';
 import 'package:suretakip/features/reports/domain/entities/report_models.dart';
@@ -11,14 +12,15 @@ class ReportsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final reports = ref.watch(reportsControllerProvider);
+    final scope = ref.watch(activeBusinessScopeProvider);
+    final reportsProvider = reportsControllerProvider(scope);
+    final reports = ref.watch(reportsProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Raporlar'),
         actions: [
           IconButton(
-            onPressed: () =>
-                ref.read(reportsControllerProvider.notifier).refresh(),
+            onPressed: () => ref.read(reportsProvider.notifier).refresh(),
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Raporları yenile',
           ),
@@ -31,14 +33,12 @@ class ReportsPage extends ConsumerWidget {
           error: (error, _) => AppErrorState(
             error: error,
             fallbackMessage: 'Raporlar yüklenemedi.',
-            onRetry: () =>
-                ref.read(reportsControllerProvider.notifier).refresh(),
+            onRetry: () => ref.read(reportsProvider.notifier).refresh(),
           ),
           data: (report) => report == null
               ? const _NoBusinessReport()
               : RefreshIndicator.adaptive(
-                  onRefresh: () =>
-                      ref.read(reportsControllerProvider.notifier).refresh(),
+                  onRefresh: () => ref.read(reportsProvider.notifier).refresh(),
                   child: _ReportContent(report: report),
                 ),
         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
 import 'package:suretakip/features/customers/presentation/controllers/customers_controllers.dart';
 import 'package:suretakip/features/customers/presentation/pages/customers_list_page.dart';
@@ -148,7 +149,7 @@ class _CustomersListController extends CustomersListController {
   int refreshCount = 0;
 
   @override
-  Future<CustomersListState> build() async {
+  Future<CustomersListState> build(BusinessScope scope) async {
     if (error != null) throw error!;
     return CustomersListState(customers: customers, query: query);
   }

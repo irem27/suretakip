@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:intl/intl.dart';
 import 'package:suretakip/app/router/app_routes.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
@@ -17,21 +18,25 @@ class ServiceDetailPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(serviceDetailProvider(serviceId));
+    final canManageCatalog =
+        ref.watch(businessCapabilitiesProvider).valueOrNull?.canManageCatalog ??
+        false;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Hizmet Detayı'),
         actions: [
-          TextButton.icon(
-            onPressed: detail.hasValue
-                ? () => context.pushNamed(
-                    AppRouteNames.serviceEdit,
-                    pathParameters: {'serviceId': serviceId},
-                  )
-                : null,
-            icon: const Icon(Icons.edit_outlined),
-            label: const Text('Düzenle'),
-          ),
-          const SizedBox(width: 8),
+          if (canManageCatalog)
+            TextButton.icon(
+              onPressed: detail.hasValue
+                  ? () => context.pushNamed(
+                      AppRouteNames.serviceEdit,
+                      pathParameters: {'serviceId': serviceId},
+                    )
+                  : null,
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('Düzenle'),
+            ),
+          if (canManageCatalog) const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
@@ -46,7 +51,10 @@ class ServiceDetailPage extends ConsumerWidget {
             ),
             onRetry: () => ref.invalidate(serviceDetailProvider(serviceId)),
           ),
-          data: (service) => _DetailContent(service: service),
+          data: (service) => _DetailContent(
+            service: service,
+            canManageCatalog: canManageCatalog,
+          ),
         ),
       ),
     );
@@ -54,9 +62,10 @@ class ServiceDetailPage extends ConsumerWidget {
 }
 
 class _DetailContent extends ConsumerWidget {
-  const _DetailContent({required this.service});
+  const _DetailContent({required this.service, required this.canManageCatalog});
 
   final Service service;
+  final bool canManageCatalog;
 
   Future<void> _toggle(BuildContext context, WidgetRef ref) async {
     final willActivate = !service.isActive;
@@ -153,53 +162,54 @@ class _DetailContent extends ConsumerWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  service.isActive
-                      ? 'Hizmeti pasife al'
-                      : 'Hizmeti aktifleştir',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+        if (canManageCatalog) const SizedBox(height: 16),
+        if (canManageCatalog)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    service.isActive
+                        ? 'Hizmeti pasife al'
+                        : 'Hizmeti aktifleştir',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  service.isActive
-                      ? 'Pasif hizmet yeni işlemlerde seçilemez; kayıt kalıcı olarak silinmez.'
-                      : 'Hizmeti yeniden yeni işlemlerde kullanılabilir yapar.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  const SizedBox(height: 8),
+                  Text(
+                    service.isActive
+                        ? 'Pasif hizmet yeni işlemlerde seçilemez; kayıt kalıcı olarak silinmez.'
+                        : 'Hizmeti yeniden yeni işlemlerde kullanılabilir yapar.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: submitState.isLoading
-                      ? null
-                      : () => _toggle(context, ref),
-                  icon: submitState.isLoading
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator.adaptive(
-                            strokeWidth: 2,
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: submitState.isLoading
+                        ? null
+                        : () => _toggle(context, ref),
+                    icon: submitState.isLoading
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator.adaptive(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : Icon(
+                            service.isActive
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
                           ),
-                        )
-                      : Icon(
-                          service.isActive
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                        ),
-                  label: Text(service.isActive ? 'Pasife Al' : 'Aktifleştir'),
-                ),
-              ],
+                    label: Text(service.isActive ? 'Pasife Al' : 'Aktifleştir'),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
       ],
     );
   }

@@ -31,7 +31,9 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final state = await container.read(historyControllerProvider.future);
+      final state = await container.read(
+        historyControllerProvider(_scope).future,
+      );
 
       expect(state.sessions, hasLength(1));
       expect(sessions.businessId, 'business-1');
@@ -44,6 +46,8 @@ void main() {
     },
   );
 }
+
+const BusinessScope _scope = (businessId: 'business-1', generation: 0);
 
 class _FakeSessionsRepository implements SessionsRepository {
   String? businessId;

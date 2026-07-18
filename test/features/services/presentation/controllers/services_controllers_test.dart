@@ -14,7 +14,9 @@ void main() {
     final container = _container(repository);
     addTearDown(container.dispose);
 
-    final state = await container.read(servicesListControllerProvider.future);
+    final state = await container.read(
+      servicesListControllerProvider(_scope).future,
+    );
 
     expect(state.services, hasLength(1));
     expect(repository.businessId, 'business-1');
@@ -30,13 +32,20 @@ void main() {
     );
     final container = _container(repository);
     addTearDown(container.dispose);
-    await container.read(servicesListControllerProvider.future);
+    final provider = servicesListControllerProvider(_scope);
+    final subscription = container.listen(
+      provider,
+      (_, _) {},
+      fireImmediately: true,
+    );
+    addTearDown(subscription.close);
+    await container.read(provider.future);
 
     await container
-        .read(servicesListControllerProvider.notifier)
+        .read(provider.notifier)
         .setFilter(ServiceStatusFilter.inactive);
 
-    final state = container.read(servicesListControllerProvider).requireValue;
+    final state = container.read(provider).requireValue;
     expect(state.visibleServices.single.id, 'service-2');
     expect(repository.includeInactive, isTrue);
   });
@@ -100,6 +109,8 @@ void main() {
     },
   );
 }
+
+const BusinessScope _scope = (businessId: 'business-1', generation: 0);
 
 ProviderContainer _container(_FakeServicesRepository repository) =>
     ProviderContainer(

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/features/businesses/domain/entities/business_capabilities.dart';
 import 'package:suretakip/features/products/domain/entities/product.dart';
 import 'package:suretakip/features/products/presentation/controllers/products_controllers.dart';
 import 'package:suretakip/features/products/presentation/pages/product_detail_page.dart';
@@ -51,6 +53,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          businessCapabilitiesProvider.overrideWithValue(_managerCapabilities),
           productDetailProvider('product-1').overrideWith((ref) {
             loadCount++;
             throw StateError('ürün detay hatası');
@@ -90,6 +93,7 @@ Future<void> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        businessCapabilitiesProvider.overrideWithValue(_managerCapabilities),
         productDetailProvider('product-1').overrideWith((ref) => product),
         productFormControllerProvider.overrideWith(() => effectiveForm),
       ],
@@ -98,6 +102,15 @@ Future<void> _pump(
   );
   await tester.pumpAndSettle();
 }
+
+const _managerCapabilities = AsyncData(
+  BusinessCapabilities(
+    canManageCatalog: true,
+    canManageMembers: true,
+    canEditBusinessSettings: true,
+    canCancelCompletedSession: true,
+  ),
+);
 
 class _ProductFormController extends ProductFormController {
   String? productId;

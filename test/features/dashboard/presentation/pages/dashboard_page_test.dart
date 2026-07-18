@@ -19,6 +19,7 @@ void main() {
       ProviderScope(
         overrides: [
           currentUserProvider.overrideWithValue(null),
+          userBusinessesProvider.overrideWith((ref) async => [_business()]),
           activeBusinessProvider.overrideWithValue(_business()),
           dashboardRepositoryProvider.overrideWithValue(
             _FakeDashboardRepository(),
@@ -47,36 +48,90 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('iki işletmede switcher seçimi ve verileri birlikte değiştirir', (
+    tester,
+  ) async {
+    final dashboardRepository = _FakeDashboardRepository();
+    final sessionsRepository = _FakeSessionsRepository();
+    final container = ProviderContainer(
+      overrides: [
+        currentUserProvider.overrideWithValue(null),
+        userBusinessesProvider.overrideWith(
+          (ref) async => [
+            _business(),
+            _business(id: 'business-2', name: 'İkinci İşletme'),
+          ],
+        ),
+        dashboardRepositoryProvider.overrideWithValue(dashboardRepository),
+        sessionsRepositoryProvider.overrideWithValue(sessionsRepository),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const DashboardPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final switcher = find.byKey(const ValueKey('business-switcher-business-1'));
+    expect(switcher, findsOneWidget);
+    await tester.tap(switcher);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('İkinci İşletme').last);
+    await tester.pumpAndSettle();
+
+    expect(container.read(selectedBusinessIdProvider), 'business-2');
+    expect(container.read(activeBusinessProvider)?.id, 'business-2');
+    expect(dashboardRepository.requestedBusinessIds.last, 'business-2');
+    expect(sessionsRepository.requestedBusinessIds.last, 'business-2');
+  });
 }
 
 class _FakeDashboardRepository implements DashboardRepository {
+  final List<String> requestedBusinessIds = [];
+
   @override
-  Future<DashboardMetrics> getMetrics({required String businessId}) async =>
-      DashboardMetrics(
-        activeSessionCount: 2,
-        todayCompletedCount: 3,
-        todayRevenue: Money(minorUnits: 12500, currencyCode: 'TRY'),
-      );
+  Future<DashboardMetrics> getMetrics({required String businessId}) async {
+    requestedBusinessIds.add(businessId);
+    return DashboardMetrics(
+      activeSessionCount: 2,
+      todayCompletedCount: 3,
+      todayRevenue: Money(minorUnits: 12500, currencyCode: 'TRY'),
+    );
+  }
 }
 
 class _FakeSessionsRepository implements SessionsRepository {
+  final List<String> requestedBusinessIds = [];
+
   @override
   Future<List<Session>> getSessions({
     required String businessId,
     String? customerId,
-  }) async => [];
+  }) async {
+    requestedBusinessIds.add(businessId);
+    return [];
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Business _business() => Business(
-  id: 'business-1',
-  name: 'Test',
-  currencyCode: 'TRY',
-  timezone: 'Europe/Istanbul',
-  isActive: true,
-  archivedAt: null,
-  createdAt: DateTime.utc(2026),
-  updatedAt: DateTime.utc(2026),
-);
+Business _business({String id = 'business-1', String name = 'Test'}) =>
+    Business(
+      id: id,
+      name: name,
+      currencyCode: 'TRY',
+      timezone: 'Europe/Istanbul',
+      isActive: true,
+      archivedAt: null,
+      createdAt: DateTime.utc(2026),
+      updatedAt: DateTime.utc(2026),
+    );

@@ -28,11 +28,16 @@ final class ServicesListState {
   );
 }
 
-class ServicesListController extends AsyncNotifier<ServicesListState> {
+class ServicesListController
+    extends AutoDisposeFamilyAsyncNotifier<ServicesListState, BusinessScope> {
   var _filter = ServiceStatusFilter.all;
+  late BusinessScope _scope;
 
   @override
-  Future<ServicesListState> build() => _load();
+  Future<ServicesListState> build(BusinessScope scope) {
+    _scope = scope;
+    return _load();
+  }
 
   Future<void> refresh() async {
     state = const AsyncLoading<ServicesListState>().copyWithPrevious(state);
@@ -47,14 +52,14 @@ class ServicesListController extends AsyncNotifier<ServicesListState> {
   }
 
   Future<ServicesListState> _load() async {
-    final business = ref.watch(activeBusinessProvider);
-    if (business == null) {
+    final businessId = _scope.businessId;
+    if (businessId == null) {
       return ServicesListState(services: const [], filter: _filter);
     }
     final services = await ref
         .watch(servicesRepositoryProvider)
         .getServices(
-          businessId: business.id,
+          businessId: businessId,
           includeInactive: _filter != ServiceStatusFilter.active,
         );
     return ServicesListState(services: services, filter: _filter);
@@ -70,7 +75,9 @@ class ServiceFormController extends AsyncNotifier<void> {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       created = await ref.read(servicesRepositoryProvider).createService(input);
-      ref.invalidate(servicesListControllerProvider);
+      ref.invalidate(
+        servicesListControllerProvider(ref.read(activeBusinessScopeProvider)),
+      );
     });
     return state.hasError ? null : created;
   }
@@ -82,7 +89,9 @@ class ServiceFormController extends AsyncNotifier<void> {
       updated = await ref
           .read(servicesRepositoryProvider)
           .updateService(service);
-      ref.invalidate(servicesListControllerProvider);
+      ref.invalidate(
+        servicesListControllerProvider(ref.read(activeBusinessScopeProvider)),
+      );
       ref.invalidate(serviceDetailProvider(service.id));
     });
     return state.hasError ? null : updated;
@@ -95,15 +104,17 @@ class ServiceFormController extends AsyncNotifier<void> {
       await ref
           .read(servicesRepositoryProvider)
           .setServiceActive(serviceId, isActive: isActive);
-      ref.invalidate(servicesListControllerProvider);
+      ref.invalidate(
+        servicesListControllerProvider(ref.read(activeBusinessScopeProvider)),
+      );
       ref.invalidate(serviceDetailProvider(serviceId));
     });
     return !state.hasError;
   }
 }
 
-final servicesListControllerProvider =
-    AsyncNotifierProvider<ServicesListController, ServicesListState>(
+final servicesListControllerProvider = AsyncNotifierProvider.autoDispose
+    .family<ServicesListController, ServicesListState, BusinessScope>(
       ServicesListController.new,
     );
 

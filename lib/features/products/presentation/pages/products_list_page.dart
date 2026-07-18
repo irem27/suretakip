@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/router/app_routes.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/features/products/domain/entities/product.dart';
@@ -27,8 +28,13 @@ class _ProductsListPageState extends ConsumerState<ProductsListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final listState = ref.watch(productsListControllerProvider);
+    final scope = ref.watch(activeBusinessScopeProvider);
+    final listProvider = productsListControllerProvider(scope);
+    final listState = ref.watch(listProvider);
     final formState = ref.watch(productFormControllerProvider);
+    final canManageCatalog =
+        ref.watch(businessCapabilitiesProvider).valueOrNull?.canManageCatalog ??
+        false;
     ref.listen(productFormControllerProvider, (_, next) {
       if (!next.hasError) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -44,15 +50,16 @@ class _ProductsListPageState extends ConsumerState<ProductsListPage> {
     });
     return Scaffold(
       appBar: AppBar(title: const Text('Ürünler')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.pushNamed(AppRouteNames.productCreate),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Yeni Ürün'),
-      ),
+      floatingActionButton: canManageCatalog
+          ? FloatingActionButton.extended(
+              onPressed: () => context.pushNamed(AppRouteNames.productCreate),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Yeni Ürün'),
+            )
+          : null,
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () =>
-              ref.read(productsListControllerProvider.notifier).refresh(),
+          onRefresh: () => ref.read(listProvider.notifier).refresh(),
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
@@ -61,9 +68,8 @@ class _ProductsListPageState extends ConsumerState<ProductsListPage> {
                   searchController: _searchController,
                   onSearchChanged: (value) => setState(() => _query = value),
                   state: listState.valueOrNull,
-                  onFilterChanged: (filter) => ref
-                      .read(productsListControllerProvider.notifier)
-                      .setFilter(filter),
+                  onFilterChanged: (filter) =>
+                      ref.read(listProvider.notifier).setFilter(filter),
                 ),
               ),
               ...listState.when(
@@ -82,9 +88,7 @@ class _ProductsListPageState extends ConsumerState<ProductsListPage> {
                         error,
                         'Ürünler yüklenemedi. Lütfen tekrar deneyin.',
                       ),
-                      onRetry: () => ref
-                          .read(productsListControllerProvider.notifier)
-                          .refresh(),
+                      onRetry: () => ref.read(listProvider.notifier).refresh(),
                       padding: const EdgeInsets.all(32),
                       iconSize: 52,
                     ),
@@ -125,12 +129,16 @@ class _ProductsListPageState extends ConsumerState<ProductsListPage> {
                             AppRouteNames.productDetail,
                             pathParameters: {'productId': products[index].id},
                           ),
-                          onStatusChanged: (isActive) => ref
-                              .read(productFormControllerProvider.notifier)
-                              .setActive(
-                                products[index].id,
-                                isActive: isActive,
-                              ),
+                          onStatusChanged: canManageCatalog
+                              ? (isActive) => ref
+                                    .read(
+                                      productFormControllerProvider.notifier,
+                                    )
+                                    .setActive(
+                                      products[index].id,
+                                      isActive: isActive,
+                                    )
+                              : null,
                         ),
                       ),
                     ),
@@ -206,7 +214,7 @@ class _ProductCard extends StatelessWidget {
   final Product product;
   final bool isUpdating;
   final VoidCallback onTap;
-  final ValueChanged<bool> onStatusChanged;
+  final ValueChanged<bool>? onStatusChanged;
 
   @override
   Widget build(BuildContext context) => Opacity(

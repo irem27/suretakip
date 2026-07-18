@@ -20,7 +20,9 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final report = await container.read(reportsControllerProvider.future);
+      final report = await container.read(
+        reportsControllerProvider(_scope).future,
+      );
 
       expect(report, isNotNull);
       expect(repository.businessId, 'business-1');
@@ -29,6 +31,8 @@ void main() {
     },
   );
 }
+
+const BusinessScope _scope = (businessId: 'business-1', generation: 0);
 
 class _FakeReportsRepository implements ReportsRepository {
   String? businessId;

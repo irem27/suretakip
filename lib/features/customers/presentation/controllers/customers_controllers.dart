@@ -29,11 +29,16 @@ final class CustomersListState {
       );
 }
 
-class CustomersListController extends AsyncNotifier<CustomersListState> {
+class CustomersListController
+    extends AutoDisposeFamilyAsyncNotifier<CustomersListState, BusinessScope> {
   var _query = '';
+  late BusinessScope _scope;
 
   @override
-  Future<CustomersListState> build() => _load();
+  Future<CustomersListState> build(BusinessScope scope) {
+    _scope = scope;
+    return _load();
+  }
 
   Future<void> refresh() async {
     state = const AsyncLoading<CustomersListState>().copyWithPrevious(state);
@@ -48,13 +53,13 @@ class CustomersListController extends AsyncNotifier<CustomersListState> {
   }
 
   Future<CustomersListState> _load() async {
-    final business = ref.watch(activeBusinessProvider);
-    if (business == null) {
+    final businessId = _scope.businessId;
+    if (businessId == null) {
       return CustomersListState(customers: const [], query: _query);
     }
     final customers = await ref
         .watch(customersRepositoryProvider)
-        .getCustomers(businessId: business.id, includeInactive: true);
+        .getCustomers(businessId: businessId, includeInactive: true);
     return CustomersListState(customers: customers, query: _query);
   }
 }
@@ -70,7 +75,9 @@ class CustomerFormController extends AsyncNotifier<void> {
       created = await ref
           .read(customersRepositoryProvider)
           .createCustomer(input);
-      ref.invalidate(customersListControllerProvider);
+      ref.invalidate(
+        customersListControllerProvider(ref.read(activeBusinessScopeProvider)),
+      );
     });
     return state.hasError ? null : created;
   }
@@ -82,7 +89,9 @@ class CustomerFormController extends AsyncNotifier<void> {
       updated = await ref
           .read(customersRepositoryProvider)
           .updateCustomer(customer);
-      ref.invalidate(customersListControllerProvider);
+      ref.invalidate(
+        customersListControllerProvider(ref.read(activeBusinessScopeProvider)),
+      );
       ref.invalidate(customerDetailProvider(customer.id));
     });
     return state.hasError ? null : updated;
@@ -94,15 +103,17 @@ class CustomerFormController extends AsyncNotifier<void> {
       await ref
           .read(customersRepositoryProvider)
           .setCustomerActive(customerId, isActive: isActive);
-      ref.invalidate(customersListControllerProvider);
+      ref.invalidate(
+        customersListControllerProvider(ref.read(activeBusinessScopeProvider)),
+      );
       ref.invalidate(customerDetailProvider(customerId));
     });
     return !state.hasError;
   }
 }
 
-final customersListControllerProvider =
-    AsyncNotifierProvider<CustomersListController, CustomersListState>(
+final customersListControllerProvider = AsyncNotifierProvider.autoDispose
+    .family<CustomersListController, CustomersListState, BusinessScope>(
       CustomersListController.new,
     );
 

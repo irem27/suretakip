@@ -18,7 +18,9 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    final metrics = await container.read(dashboardControllerProvider.future);
+    final metrics = await container.read(
+      dashboardControllerProvider(_businessScope).future,
+    );
 
     expect(metrics, isNotNull);
     expect(repository.businessId, 'business-1');
@@ -36,12 +38,17 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    final metrics = await container.read(dashboardControllerProvider.future);
+    final metrics = await container.read(
+      dashboardControllerProvider(_emptyScope).future,
+    );
 
     expect(metrics, isNull);
     expect(repository.businessId, isNull);
   });
 }
+
+const BusinessScope _businessScope = (businessId: 'business-1', generation: 0);
+const BusinessScope _emptyScope = (businessId: null, generation: 0);
 
 class _FakeDashboardRepository implements DashboardRepository {
   String? businessId;

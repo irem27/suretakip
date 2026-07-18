@@ -7,7 +7,9 @@ import 'package:suretakip/features/auth/domain/entities/auth_session_state.dart'
 import 'package:suretakip/features/auth/domain/repositories/auth_repository.dart';
 import 'package:suretakip/features/businesses/data/datasources/businesses_remote_data_source.dart';
 import 'package:suretakip/features/businesses/data/repositories/businesses_repository_impl.dart';
+import 'package:suretakip/features/businesses/domain/entities/business_capabilities.dart';
 import 'package:suretakip/features/businesses/domain/entities/business.dart';
+import 'package:suretakip/features/businesses/domain/entities/business_member.dart';
 import 'package:suretakip/features/businesses/domain/repositories/businesses_repository.dart';
 import 'package:suretakip/features/customers/data/datasources/customers_remote_data_source.dart';
 import 'package:suretakip/features/customers/data/repositories/customers_repository_impl.dart';
@@ -76,10 +78,111 @@ final userBusinessesProvider = FutureProvider<List<Business>>((ref) async {
   return ref.watch(businessesRepositoryProvider).getBusinesses();
 });
 
+class SelectedBusinessIdNotifier extends Notifier<String?> {
+  @override
+  String? build() {
+    ref.listen(userBusinessesProvider, (_, next) {
+      if (!next.hasValue || state == null) return;
+      final activeBusinesses = next.requireValue.where(
+        (business) => business.isActive,
+      );
+      if (!activeBusinesses.any((business) => business.id == state)) {
+        state = null;
+      }
+    });
+    return null;
+  }
+
+  void selectBusiness(String? businessId) {
+    if (businessId == null) {
+      state = null;
+      return;
+    }
+    final businesses = ref.read(userBusinessesProvider).valueOrNull;
+    final isActiveMembership =
+        businesses?.any(
+          (business) => business.isActive && business.id == businessId,
+        ) ??
+        false;
+    state = isActiveMembership ? businessId : null;
+  }
+}
+
+final selectedBusinessIdProvider =
+    NotifierProvider<SelectedBusinessIdNotifier, String?>(
+      SelectedBusinessIdNotifier.new,
+    );
+
 final activeBusinessProvider = Provider<Business?>((ref) {
   final businesses = ref.watch(userBusinessesProvider).valueOrNull;
-  return businesses == null || businesses.isEmpty ? null : businesses.first;
+  if (businesses == null) return null;
+  final activeBusinesses = businesses
+      .where((business) => business.isActive)
+      .toList(growable: false);
+  if (activeBusinesses.isEmpty) return null;
+
+  final selectedId = ref.watch(selectedBusinessIdProvider);
+  for (final business in activeBusinesses) {
+    if (business.id == selectedId) return business;
+  }
+  return activeBusinesses.first;
 });
+
+typedef BusinessScope = ({String? businessId, int generation});
+
+class BusinessScopeGenerationNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void advance() => state++;
+}
+
+final businessScopeGenerationProvider =
+    NotifierProvider<BusinessScopeGenerationNotifier, int>(
+      BusinessScopeGenerationNotifier.new,
+    );
+
+final activeBusinessScopeProvider = Provider<BusinessScope>((ref) {
+  return (
+    businessId: ref.watch(activeBusinessProvider)?.id,
+    generation: ref.watch(businessScopeGenerationProvider),
+  );
+});
+
+final currentMemberProvider = FutureProvider.autoDispose
+    .family<BusinessMember?, BusinessScope>((ref, scope) async {
+      await ref.watch(userBusinessesProvider.future);
+      final authenticatedUserId = ref.watch(authenticatedUserIdProvider);
+      final userId = await authenticatedUserId.when(
+        data: Future.value,
+        loading: () async =>
+            (await ref.watch(authSessionStateProvider.future)).userId,
+        error: Future.error,
+      );
+      final businessId = scope.businessId;
+      if (businessId == null || userId == null) return null;
+
+      final members = await ref
+          .watch(businessesRepositoryProvider)
+          .getMembers(businessId);
+      for (final member in members) {
+        if (member.businessId == businessId &&
+            member.userId == userId &&
+            member.isActive) {
+          return member;
+        }
+      }
+      return null;
+    });
+
+final businessCapabilitiesProvider = Provider<AsyncValue<BusinessCapabilities>>(
+  (ref) {
+    final scope = ref.watch(activeBusinessScopeProvider);
+    return ref
+        .watch(currentMemberProvider(scope))
+        .whenData((member) => BusinessCapabilities.forRole(member?.role));
+  },
+);
 
 final servicesRemoteDataSourceProvider = Provider<ServicesRemoteDataSource>(
   (ref) => ServicesRemoteDataSource(ref.watch(supabaseClientProvider)),

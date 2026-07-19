@@ -31,6 +31,8 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+# build bir symlink olabilir; slash'sız kural symlink'i de yakalar
+/build
 /coverage/
 .env
 .env.*

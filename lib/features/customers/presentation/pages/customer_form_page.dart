@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:go_router/go_router.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
@@ -24,11 +25,21 @@ class CustomerFormPage extends ConsumerWidget {
         .watch(customerDetailProvider(id))
         .when(
           loading: () => Scaffold(
-            appBar: AppBar(title: const Text('Müşteriyi Düzenle')),
+            appBar: AppBar(
+              leading: const AppBackButton(
+                fallbackRouteName: AppRouteNames.customers,
+              ),
+              title: const Text('Müşteriyi Düzenle'),
+            ),
             body: const Center(child: CircularProgressIndicator.adaptive()),
           ),
           error: (error, _) => Scaffold(
-            appBar: AppBar(title: const Text('Müşteriyi Düzenle')),
+            appBar: AppBar(
+              leading: const AppBackButton(
+                fallbackRouteName: AppRouteNames.customers,
+              ),
+              title: const Text('Müşteriyi Düzenle'),
+            ),
             body: _LoadError(error: error, customerId: id),
           ),
           data: (customer) => _CustomerForm(customer: customer),
@@ -119,7 +130,7 @@ class _CustomerFormState extends ConsumerState<_CustomerForm> {
       context.pop();
       return;
     }
-    context.goNamed(
+    context.pushReplacementNamed(
       AppRouteNames.customerDetail,
       pathParameters: {'customerId': result.id},
     );
@@ -143,6 +154,9 @@ class _CustomerFormState extends ConsumerState<_CustomerForm> {
     });
     return Scaffold(
       appBar: AppBar(
+        leading: const AppBackButton(
+          fallbackRouteName: AppRouteNames.customers,
+        ),
         title: Text(_isEditing ? 'Müşteriyi Düzenle' : 'Yeni Müşteri'),
       ),
       body: SafeArea(

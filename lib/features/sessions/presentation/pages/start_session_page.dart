@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/router/app_routes.dart';
 import 'package:suretakip/core/errors/domain_exception.dart';
+import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
 import 'package:suretakip/features/customers/presentation/controllers/customers_controllers.dart';
+import 'package:suretakip/features/customers/presentation/widgets/quick_customer_sheet.dart';
 import 'package:suretakip/features/services/domain/entities/service.dart';
 import 'package:suretakip/features/services/presentation/controllers/services_controllers.dart';
 import 'package:suretakip/features/sessions/presentation/controllers/sessions_controllers.dart';
@@ -30,6 +32,13 @@ class _StartSessionPageState extends ConsumerState<StartSessionPage> {
     super.dispose();
   }
 
+  /// Akıştan çıkmadan müşteri oluşturur ve oluşturulanı doğrudan seçer.
+  Future<void> _addCustomer() async {
+    final created = await showQuickCustomerSheet(context);
+    if (!mounted || created == null) return;
+    setState(() => _customerId = created.id);
+  }
+
   @override
   Widget build(BuildContext context) {
     final scope = ref.watch(activeBusinessScopeProvider);
@@ -39,7 +48,12 @@ class _StartSessionPageState extends ConsumerState<StartSessionPage> {
     final services = ref.watch(servicesProvider);
     final submit = ref.watch(startSessionControllerProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Yeni İşlem')),
+      appBar: AppBar(
+        leading: const AppBackButton(
+          fallbackRouteName: AppRouteNames.dashboard,
+        ),
+        title: const Text('Yeni İşlem'),
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -62,6 +76,7 @@ class _StartSessionPageState extends ConsumerState<StartSessionPage> {
                     .toList(growable: false),
                 selectedId: _customerId,
                 onSelected: (id) => setState(() => _customerId = id),
+                onAddCustomer: _addCustomer,
               ),
             ),
             const SizedBox(height: 24),
@@ -130,7 +145,7 @@ class _StartSessionPageState extends ConsumerState<StartSessionPage> {
         );
     if (!mounted) return;
     if (sessionId != null) {
-      context.goNamed(
+      context.pushReplacementNamed(
         AppRouteNames.sessionDetail,
         pathParameters: {'sessionId': sessionId},
       );
@@ -177,11 +192,13 @@ class _CustomerSelector extends StatelessWidget {
     required this.customers,
     required this.selectedId,
     required this.onSelected,
+    required this.onAddCustomer,
   });
 
   final List<Customer> customers;
   final String? selectedId;
   final ValueChanged<String?> onSelected;
+  final VoidCallback onAddCustomer;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -225,6 +242,20 @@ class _CustomerSelector extends StatelessWidget {
             ),
           ),
         ),
+      Semantics(
+        button: true,
+        label: 'Yeni müşteri ekle',
+        excludeSemantics: true,
+        child: Card(
+          clipBehavior: Clip.antiAlias,
+          child: ListTile(
+            onTap: onAddCustomer,
+            title: const Text('Yeni müşteri ekle'),
+            subtitle: const Text('Müşteriyi kaydedip doğrudan seç'),
+            leading: const Icon(Icons.person_add_alt_1_rounded),
+          ),
+        ),
+      ),
     ],
   );
 }

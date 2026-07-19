@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:go_router/go_router.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
@@ -26,11 +27,21 @@ class ProductFormPage extends ConsumerWidget {
         .watch(productDetailProvider(id))
         .when(
           loading: () => Scaffold(
-            appBar: AppBar(title: const Text('Ürünü Düzenle')),
+            appBar: AppBar(
+              leading: const AppBackButton(
+                fallbackRouteName: AppRouteNames.products,
+              ),
+              title: const Text('Ürünü Düzenle'),
+            ),
             body: const Center(child: CircularProgressIndicator.adaptive()),
           ),
           error: (error, _) => Scaffold(
-            appBar: AppBar(title: const Text('Ürünü Düzenle')),
+            appBar: AppBar(
+              leading: const AppBackButton(
+                fallbackRouteName: AppRouteNames.products,
+              ),
+              title: const Text('Ürünü Düzenle'),
+            ),
             body: _LoadError(error: error, productId: id),
           ),
           data: (product) => _ProductForm(product: product),
@@ -133,7 +144,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
       context.pop();
       return;
     }
-    context.goNamed(
+    context.pushReplacementNamed(
       AppRouteNames.productDetail,
       pathParameters: {'productId': result.id},
     );
@@ -158,7 +169,10 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
       );
     });
     return Scaffold(
-      appBar: AppBar(title: Text(_isEditing ? 'Ürünü Düzenle' : 'Yeni Ürün')),
+      appBar: AppBar(
+        leading: const AppBackButton(fallbackRouteName: AppRouteNames.products),
+        title: Text(_isEditing ? 'Ürünü Düzenle' : 'Yeni Ürün'),
+      ),
       body: SafeArea(
         child: Form(
           key: _formKey,

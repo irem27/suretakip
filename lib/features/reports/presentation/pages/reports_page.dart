@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/app/router/app_routes.dart';
+import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
+import 'package:suretakip/core/presentation/widgets/app_bottom_nav_bar.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/core/value_objects/money.dart';
 import 'package:suretakip/features/reports/domain/entities/report_models.dart';
@@ -17,6 +20,9 @@ class ReportsPage extends ConsumerWidget {
     final reports = ref.watch(reportsProvider);
     return Scaffold(
       appBar: AppBar(
+        leading: const AppBackButton(
+          fallbackRouteName: AppRouteNames.dashboard,
+        ),
         title: const Text('Raporlar'),
         actions: [
           IconButton(
@@ -26,6 +32,7 @@ class ReportsPage extends ConsumerWidget {
           ),
         ],
       ),
+      bottomNavigationBar: const AppBottomNavBar(current: AppSection.reports),
       body: SafeArea(
         child: reports.when(
           loading: () =>

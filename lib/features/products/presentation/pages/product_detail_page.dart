@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:intl/intl.dart';
 import 'package:suretakip/app/router/app_routes.dart';
+import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/features/products/domain/entities/product.dart';
 import 'package:suretakip/features/products/presentation/controllers/products_controllers.dart';
@@ -24,6 +25,7 @@ class ProductDetailPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ürün Detayı'),
+        leading: const AppBackButton(fallbackRouteName: AppRouteNames.products),
         actions: [
           if (canManageCatalog)
             TextButton.icon(

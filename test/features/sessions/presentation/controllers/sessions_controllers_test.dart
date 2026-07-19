@@ -325,5 +325,15 @@ class _FakeSessionsRepository implements SessionsRepository {
   ) async => const [];
 
   @override
+  Future<Map<String, List<SessionTimeEntry>>> getTimeEntriesForSessions(
+    List<String> sessionIds,
+  ) async => const {};
+
+  @override
+  Future<Map<String, List<SessionItem>>> getItemsForSessions(
+    List<String> sessionIds,
+  ) async => const {};
+
+  @override
   Future<DateTime> serverNow() async => serverTimes[serverNowCallCount++];
 }

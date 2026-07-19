@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/router/app_routes.dart';
+import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
+import 'package:suretakip/core/presentation/widgets/app_bottom_nav_bar.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
 import 'package:suretakip/features/customers/presentation/controllers/customers_controllers.dart';
@@ -45,7 +47,13 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
       );
     });
     return Scaffold(
-      appBar: AppBar(title: const Text('Müşteriler')),
+      appBar: AppBar(
+        leading: const AppBackButton(
+          fallbackRouteName: AppRouteNames.definitions,
+        ),
+        title: const Text('Müşteriler'),
+      ),
+      bottomNavigationBar: const AppBottomNavBar(current: AppSection.customers),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.pushNamed(AppRouteNames.customerCreate),
         icon: const Icon(Icons.person_add_alt_1_rounded),

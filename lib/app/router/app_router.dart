@@ -23,6 +23,7 @@ import 'package:suretakip/features/services/presentation/pages/service_detail_pa
 import 'package:suretakip/features/services/presentation/pages/service_form_page.dart';
 import 'package:suretakip/features/services/presentation/pages/services_list_page.dart';
 import 'package:suretakip/features/sessions/presentation/pages/session_detail_page.dart';
+import 'package:suretakip/features/sessions/presentation/pages/sessions_overview_page.dart';
 import 'package:suretakip/features/sessions/presentation/pages/start_session_page.dart';
 
 // GoRouter YALNIZCA BİR KEZ oluşturulur. Auth/işletme durumu değiştiğinde
@@ -169,6 +170,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        name: AppRouteNames.sessions,
+        path: AppRoutes.sessions,
+        builder: (context, state) => const SessionsOverviewPage(),
+      ),
+      GoRoute(
         name: AppRouteNames.sessionStart,
         path: AppRoutes.sessionStart,
         builder: (context, state) => const StartSessionPage(),
@@ -236,8 +242,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           state.matchedLocation == AppRoutes.customerCreate ||
           state.matchedLocation.startsWith('${AppRoutes.customers}/');
       final isSessionPage =
+          state.matchedLocation == AppRoutes.sessions ||
           state.matchedLocation == AppRoutes.sessionStart ||
-          state.matchedLocation.startsWith('/sessions/');
+          state.matchedLocation.startsWith('${AppRoutes.sessions}/');
       return isBusinessPage || isSessionPage ? null : AppRoutes.dashboard;
     },
   );

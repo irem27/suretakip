@@ -8,13 +8,17 @@ import 'package:suretakip/app/router/app_routes.dart';
 import 'package:suretakip/core/constants/app_constants.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
 import 'package:suretakip/core/errors/domain_exception.dart';
+import 'package:suretakip/core/presentation/widgets/app_bottom_nav_bar.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/core/utils/business_date_ranges.dart';
 import 'package:suretakip/features/auth/presentation/controllers/auth_controllers.dart';
+import 'package:suretakip/features/customers/domain/entities/customer.dart';
+import 'package:suretakip/features/customers/presentation/controllers/customers_controllers.dart';
 import 'package:suretakip/features/dashboard/presentation/controllers/dashboard_controller.dart';
 import 'package:suretakip/features/sessions/presentation/controllers/sessions_controllers.dart';
 import 'package:suretakip/features/sessions/presentation/utils/session_presentation_utils.dart';
-import 'package:suretakip/features/sessions/presentation/widgets/session_status_chip.dart';
+import 'package:suretakip/features/sessions/presentation/widgets/active_sessions_sheet.dart';
+import 'package:suretakip/features/sessions/presentation/widgets/open_session_card.dart';
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
@@ -28,7 +32,23 @@ class DashboardPage extends ConsumerWidget {
     final dashboardProvider = dashboardControllerProvider(scope);
     final sessionsProvider = sessionsListControllerProvider(scope);
     final openSessions = ref.watch(openSessionsProvider);
+    // Müşteri adları tek listeden eşlenir; kart başına sorgu (N+1) yapılmaz.
+    final customers =
+        ref
+            .watch(customersListControllerProvider(scope))
+            .valueOrNull
+            ?.customers ??
+        const <Customer>[];
+    final customerNamesById = {
+      for (final customer in customers) customer.id: customer.name,
+    };
     final dashboardMetrics = ref.watch(dashboardProvider);
+    // Metrik henüz gelmediyse açık seans listesine düşülür; böylece kart
+    // veri gelene kadar da doğru davranır.
+    final activeSessionCount =
+        dashboardMetrics.valueOrNull?.activeSessionCount ??
+        openSessions.valueOrNull?.length ??
+        0;
     final allSessions = ref.watch(sessionsProvider);
     final businesses =
         ref
@@ -73,6 +93,7 @@ class DashboardPage extends ConsumerWidget {
           ),
         ],
       ),
+      bottomNavigationBar: const AppBottomNavBar(current: AppSection.dashboard),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),
@@ -141,6 +162,12 @@ class DashboardPage extends ConsumerWidget {
                         ),
                         icon: Icons.timelapse_rounded,
                         color: colorScheme.primary,
+                        // Sayı sıfırken açılacak bir döküm yok; kart o durumda
+                        // salt okunur kalır ve yanıltıcı bir aksiyon sunmaz.
+                        onTap: activeSessionCount == 0
+                            ? null
+                            : () => showActiveSessionsSheet(context),
+                        hint: 'Detayları gör',
                       ),
                     ),
                     SizedBox(
@@ -252,23 +279,10 @@ class DashboardPage extends ConsumerWidget {
                   : Column(
                       children: [
                         for (final session in sessions)
-                          Card(
-                            clipBehavior: Clip.antiAlias,
-                            child: ListTile(
-                              minTileHeight: 76,
-                              leading: const Icon(Icons.timer_outlined),
-                              title: Text(session.serviceNameSnapshot),
-                              subtitle: Text(
-                                'Başlangıç: ${_formatBusinessDate(session.startedAt, businessTimezone)}',
-                              ),
-                              trailing: SessionStatusChip(
-                                status: session.status,
-                              ),
-                              onTap: () => context.pushNamed(
-                                AppRouteNames.sessionDetail,
-                                pathParameters: {'sessionId': session.id},
-                              ),
-                            ),
+                          OpenSessionCard(
+                            session: session,
+                            customerName: customerNamesById[session.customerId],
+                            businessTimezone: businessTimezone,
                           ),
                       ],
                     ),
@@ -471,6 +485,8 @@ class _MetricCard extends StatelessWidget {
     required this.value,
     required this.icon,
     required this.color,
+    this.onTap,
+    this.hint,
   });
 
   final String title;
@@ -478,17 +494,21 @@ class _MetricCard extends StatelessWidget {
   final IconData icon;
   final Color color;
 
+  /// Dokunulabilir metrikler için; null ise kart salt okunurdur.
+  final VoidCallback? onTap;
+
+  /// Dokunmanın ne yapacağını anlatan kısa ipucu (yalnızca [onTap] varken).
+  final String? hint;
+
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      container: true,
-      label: '$title: $value',
-      excludeSemantics: true,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final theme = Theme.of(context);
+    final content = Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
               Container(
                 width: 48,
@@ -499,23 +519,52 @@ class _MetricCard extends StatelessWidget {
                 ),
                 child: Icon(icon, color: color),
               ),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+              const Spacer(),
+              if (onTap != null)
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
             ],
           ),
-        ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (onTap != null && hint != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              hint!,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+
+    return Semantics(
+      container: true,
+      button: onTap != null,
+      label: onTap == null ? '$title: $value' : '$title: $value. ${hint ?? ''}',
+      excludeSemantics: true,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: onTap == null
+            ? content
+            : InkWell(onTap: onTap, child: content),
       ),
     );
   }

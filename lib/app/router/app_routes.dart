@@ -21,6 +21,7 @@ class AppRoutes {
   static const customerCreate = '/customers/new';
   static const customerDetail = '/customers/:customerId';
   static const customerEdit = '/customers/:customerId/edit';
+  static const sessions = '/sessions';
   static const sessionStart = '/sessions/new';
   static const sessionDetail = '/sessions/:sessionId';
 }
@@ -48,6 +49,7 @@ class AppRouteNames {
   static const customerCreate = 'customer-create';
   static const customerDetail = 'customer-detail';
   static const customerEdit = 'customer-edit';
+  static const sessions = 'sessions';
   static const sessionStart = 'session-start';
   static const sessionDetail = 'session-detail';
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/router/app_routes.dart';
+import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/features/products/domain/entities/product.dart';
 import 'package:suretakip/features/products/presentation/controllers/products_controllers.dart';
@@ -49,7 +50,12 @@ class _ProductsListPageState extends ConsumerState<ProductsListPage> {
       );
     });
     return Scaffold(
-      appBar: AppBar(title: const Text('Ürünler')),
+      appBar: AppBar(
+        leading: const AppBackButton(
+          fallbackRouteName: AppRouteNames.definitions,
+        ),
+        title: const Text('Ürünler'),
+      ),
       floatingActionButton: canManageCatalog
           ? FloatingActionButton.extended(
               onPressed: () => context.pushNamed(AppRouteNames.productCreate),

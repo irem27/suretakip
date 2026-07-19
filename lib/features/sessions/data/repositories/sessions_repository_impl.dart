@@ -62,6 +62,34 @@ class SessionsRepositoryImpl implements SessionsRepository {
       });
 
   @override
+  Future<Map<String, List<SessionTimeEntry>>> getTimeEntriesForSessions(
+    List<String> sessionIds,
+  ) => _guard(() async {
+    if (sessionIds.isEmpty) return const {};
+    final rows = await _dataSource.getTimeEntriesForSessions(sessionIds);
+    final grouped = <String, List<SessionTimeEntry>>{};
+    for (final row in rows) {
+      final entry = _timeEntryFromJson(row);
+      (grouped[entry.sessionId] ??= <SessionTimeEntry>[]).add(entry);
+    }
+    return grouped;
+  });
+
+  @override
+  Future<Map<String, List<SessionItem>>> getItemsForSessions(
+    List<String> sessionIds,
+  ) => _guard(() async {
+    if (sessionIds.isEmpty) return const {};
+    final rows = await _dataSource.getItemsForSessions(sessionIds);
+    final grouped = <String, List<SessionItem>>{};
+    for (final row in rows) {
+      final item = _itemFromJson(row);
+      (grouped[item.sessionId] ??= <SessionItem>[]).add(item);
+    }
+    return grouped;
+  });
+
+  @override
   Future<String> startSession({
     required String businessId,
     required String serviceId,

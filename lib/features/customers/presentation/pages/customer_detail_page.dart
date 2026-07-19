@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:suretakip/app/router/app_routes.dart';
+import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
 import 'package:suretakip/features/customers/presentation/controllers/customers_controllers.dart';
@@ -20,6 +21,9 @@ class CustomerDetailPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Müşteri Detayı'),
+        leading: const AppBackButton(
+          fallbackRouteName: AppRouteNames.customers,
+        ),
         actions: [
           TextButton.icon(
             onPressed: detail.hasValue

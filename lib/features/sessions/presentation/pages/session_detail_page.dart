@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:suretakip/app/router/app_routes.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
 import 'package:suretakip/core/errors/domain_exception.dart';
+import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/features/sessions/presentation/controllers/sessions_controllers.dart';
 import 'package:suretakip/features/sessions/presentation/utils/session_presentation_utils.dart';
@@ -52,7 +53,12 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
     final detail = ref.watch(sessionDetailProvider(widget.sessionId));
     final action = ref.watch(sessionActionsControllerProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('İşlem Detayı')),
+      appBar: AppBar(
+        title: const Text('İşlem Detayı'),
+        leading: const AppBackButton(
+          fallbackRouteName: AppRouteNames.dashboard,
+        ),
+      ),
       body: SafeArea(
         child: detail.when(
           loading: () =>

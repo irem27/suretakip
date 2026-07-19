@@ -61,12 +61,33 @@ class SessionsRemoteDataSource {
           .eq('session_id', sessionId)
           .order('created_at');
 
+  /// Birden çok seansın ürün kalemlerini TEK sorguda getirir (N+1 önlemi).
+  Future<List<Map<String, dynamic>>> getItemsForSessions(
+    List<String> sessionIds,
+  ) => _client
+      .from(AppConstants.sessionItemsTable)
+      .select()
+      .inFilter('session_id', sessionIds)
+      .order('created_at');
+
   Future<List<Map<String, dynamic>>> getSessionTimeEntries(String sessionId) =>
       _client
           .from(AppConstants.sessionTimeEntriesTable)
           .select()
           .eq('session_id', sessionId)
           .order('started_at');
+
+  /// Birden çok seansın zaman kayıtlarını TEK sorguda getirir.
+  ///
+  /// Açık işlemleri listelerken her kart için ayrı sorgu atmak N+1 demektir;
+  /// canlı süre gösteren listeler bu toplu sorguyu kullanır.
+  Future<List<Map<String, dynamic>>> getTimeEntriesForSessions(
+    List<String> sessionIds,
+  ) => _client
+      .from(AppConstants.sessionTimeEntriesTable)
+      .select()
+      .inFilter('session_id', sessionIds)
+      .order('started_at');
 
   Future<dynamic> startSession({
     required String businessId,

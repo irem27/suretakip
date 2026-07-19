@@ -10,6 +10,8 @@ import 'package:suretakip/features/dashboard/domain/repositories/dashboard_repos
 import 'package:suretakip/features/dashboard/presentation/pages/dashboard_page.dart';
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
 import 'package:suretakip/features/sessions/domain/repositories/sessions_repository.dart';
+import 'package:suretakip/features/sessions/presentation/controllers/active_sessions_controller.dart';
+import 'package:suretakip/features/sessions/presentation/widgets/active_sessions_sheet.dart';
 
 void main() {
   testWidgets('dashboard metrikleri ve ikon aksiyonları erişilebilirdir', (
@@ -36,17 +38,88 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.bySemanticsLabel('Aktif İşlem: 2'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Aktif İşlem: 2. Detayları gör'),
+      findsOneWidget,
+    );
     expect(find.byTooltip('Çıkış yap'), findsOneWidget);
     expect(find.byTooltip('Aktif işlemleri yenile'), findsOneWidget);
     expect(
       tester.getSize(find.byTooltip('Çıkış yap')).height,
       greaterThanOrEqualTo(48),
     );
+    // Boş durum kartı metrik kartlarının altında; görünür alana kaydırılır.
+    await tester.scrollUntilVisible(
+      find.textContaining('İlk işleminizi başlatabilirsiniz'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(
       find.textContaining('İlk işleminizi başlatabilirsiniz'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('aktif işlem metriğine dokununca canlı döküm açılır', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          currentUserProvider.overrideWithValue(null),
+          userBusinessesProvider.overrideWith((ref) async => [_business()]),
+          activeBusinessProvider.overrideWithValue(_business()),
+          dashboardRepositoryProvider.overrideWithValue(
+            _FakeDashboardRepository(),
+          ),
+          sessionsRepositoryProvider.overrideWithValue(
+            _FakeSessionsRepository(),
+          ),
+          activeSessionSummariesProvider.overrideWith((ref) async => const []),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const DashboardPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.bySemanticsLabel('Aktif İşlem: 2. Detayları gör'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ActiveSessionsSheet), findsOneWidget);
+    expect(find.text('Aktif İşlemler'), findsWidgets);
+  });
+
+  testWidgets('aktif işlem sıfırken metrik kartı aksiyon sunmaz', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          currentUserProvider.overrideWithValue(null),
+          userBusinessesProvider.overrideWith((ref) async => [_business()]),
+          activeBusinessProvider.overrideWithValue(_business()),
+          dashboardRepositoryProvider.overrideWithValue(
+            _FakeDashboardRepository(activeSessionCount: 0),
+          ),
+          sessionsRepositoryProvider.overrideWithValue(
+            _FakeSessionsRepository(),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const DashboardPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Açılacak bir döküm yokken kart salt okunur kalmalı, "Detayları gör"
+    // çağrısıyla kullanıcıyı boş bir panele göndermemeli.
+    expect(find.bySemanticsLabel('Aktif İşlem: 0'), findsOneWidget);
+    expect(find.text('Detayları gör'), findsNothing);
   });
 
   testWidgets('iki işletmede switcher seçimi ve verileri birlikte değiştirir', (
@@ -95,13 +168,16 @@ void main() {
 }
 
 class _FakeDashboardRepository implements DashboardRepository {
+  _FakeDashboardRepository({this.activeSessionCount = 2});
+
+  final int activeSessionCount;
   final List<String> requestedBusinessIds = [];
 
   @override
   Future<DashboardMetrics> getMetrics({required String businessId}) async {
     requestedBusinessIds.add(businessId);
     return DashboardMetrics(
-      activeSessionCount: 2,
+      activeSessionCount: activeSessionCount,
       todayCompletedCount: 3,
       todayRevenue: Money(minorUnits: 12500, currencyCode: 'TRY'),
     );

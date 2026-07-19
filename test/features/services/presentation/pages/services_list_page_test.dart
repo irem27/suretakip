@@ -46,7 +46,7 @@ void main() {
       tester
           .getSize(
             find.ancestor(
-              of: find.byTooltip('Ana sayfaya dön'),
+              of: find.byTooltip('Geri'),
               matching: find.byType(IconButton),
             ),
           )

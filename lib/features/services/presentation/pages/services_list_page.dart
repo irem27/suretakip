@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/router/app_routes.dart';
+import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/features/services/domain/entities/service.dart';
 import 'package:suretakip/features/services/presentation/controllers/services_controllers.dart';
@@ -57,10 +58,8 @@ class _ServicesListPageState extends ConsumerState<ServicesListPage> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          onPressed: () => context.go(AppRoutes.dashboard),
-          icon: const Icon(Icons.arrow_back_rounded),
-          tooltip: 'Ana sayfaya dön',
+        leading: const AppBackButton(
+          fallbackRouteName: AppRouteNames.definitions,
         ),
         title: const Text('Hizmetler'),
       ),

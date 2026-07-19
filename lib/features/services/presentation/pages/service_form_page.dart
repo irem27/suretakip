@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:go_router/go_router.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
@@ -26,11 +27,21 @@ class ServiceFormPage extends ConsumerWidget {
         .watch(serviceDetailProvider(id))
         .when(
           loading: () => Scaffold(
-            appBar: AppBar(title: const Text('Hizmeti Düzenle')),
+            appBar: AppBar(
+              leading: const AppBackButton(
+                fallbackRouteName: AppRouteNames.services,
+              ),
+              title: const Text('Hizmeti Düzenle'),
+            ),
             body: const Center(child: CircularProgressIndicator.adaptive()),
           ),
           error: (error, _) => Scaffold(
-            appBar: AppBar(title: const Text('Hizmeti Düzenle')),
+            appBar: AppBar(
+              leading: const AppBackButton(
+                fallbackRouteName: AppRouteNames.services,
+              ),
+              title: const Text('Hizmeti Düzenle'),
+            ),
             body: _FormLoadError(error: error, serviceId: id),
           ),
           data: (service) => _ServiceForm(service: service),
@@ -121,7 +132,7 @@ class _ServiceFormState extends ConsumerState<_ServiceForm> {
       context.pop();
       return;
     }
-    context.goNamed(
+    context.pushReplacementNamed(
       AppRouteNames.serviceDetail,
       pathParameters: {'serviceId': result.id},
     );
@@ -150,6 +161,7 @@ class _ServiceFormState extends ConsumerState<_ServiceForm> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: const AppBackButton(fallbackRouteName: AppRouteNames.services),
         title: Text(_isEditing ? 'Hizmeti Düzenle' : 'Yeni Hizmet'),
       ),
       body: SafeArea(

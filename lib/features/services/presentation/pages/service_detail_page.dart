@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:intl/intl.dart';
 import 'package:suretakip/app/router/app_routes.dart';
+import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/features/services/domain/entities/service.dart';
 import 'package:suretakip/features/services/presentation/controllers/services_controllers.dart';
@@ -24,6 +25,7 @@ class ServiceDetailPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Hizmet Detayı'),
+        leading: const AppBackButton(fallbackRouteName: AppRouteNames.services),
         actions: [
           if (canManageCatalog)
             TextButton.icon(

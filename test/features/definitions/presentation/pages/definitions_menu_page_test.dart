@@ -10,10 +10,11 @@ void main() {
   ) async {
     await _pump(tester);
 
-    expect(find.text('Tanımlar'), findsOneWidget);
+    // Alt navigasyonda da 'Tanımlar' etiketi var; başlık özellikle aranır.
+    expect(find.widgetWithText(AppBar, 'Tanımlar'), findsOneWidget);
     expect(
       find.text(
-        'İşletmenizde kullandığınız hizmet, ürün ve müşteri kayıtlarını yönetin.',
+        'İşletmenizde kullandığınız hizmet ve ürün kayıtlarını yönetin.',
       ),
       findsOneWidget,
     );
@@ -25,10 +26,8 @@ void main() {
       find.text('Satış ürünlerini, fiyatlarını ve stoklarını yönetin.'),
       findsOneWidget,
     );
-    expect(
-      find.text('Müşteri iletişim bilgilerini ve durumlarını yönetin.'),
-      findsOneWidget,
-    );
+    // Müşteriler artık alt navigasyonda; Tanımlar listesinde kartı yok.
+    expect(find.widgetWithText(InkWell, 'Müşteriler'), findsNothing);
     expect(
       tester.getSize(find.widgetWithText(InkWell, 'Hizmetler')).height,
       greaterThanOrEqualTo(48),
@@ -38,7 +37,6 @@ void main() {
   for (final routeCase in const [
     (label: 'Hizmetler', target: 'Hizmetler hedefi'),
     (label: 'Ürünler', target: 'Ürünler hedefi'),
-    (label: 'Müşteriler', target: 'Müşteriler hedefi'),
   ]) {
     testWidgets('${routeCase.label} kartı doğru ekrana gider', (tester) async {
       await _pump(tester);
@@ -68,11 +66,6 @@ Future<void> _pump(WidgetTester tester) async {
         name: AppRouteNames.products,
         path: AppRoutes.products,
         builder: (_, _) => const Scaffold(body: Text('Ürünler hedefi')),
-      ),
-      GoRoute(
-        name: AppRouteNames.customers,
-        path: AppRoutes.customers,
-        builder: (_, _) => const Scaffold(body: Text('Müşteriler hedefi')),
       ),
     ],
   );

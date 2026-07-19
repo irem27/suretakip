@@ -1,19 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:suretakip/app/router/app_routes.dart';
+import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
+import 'package:suretakip/core/presentation/widgets/app_bottom_nav_bar.dart';
 
 class DefinitionsMenuPage extends StatelessWidget {
   const DefinitionsMenuPage({super.key});
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Tanımlar')),
+    appBar: AppBar(
+      leading: const AppBackButton(fallbackRouteName: AppRouteNames.dashboard),
+      title: const Text('Tanımlar'),
+    ),
+    bottomNavigationBar: const AppBottomNavBar(current: AppSection.definitions),
     body: SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            'İşletmenizde kullandığınız hizmet, ürün ve müşteri kayıtlarını yönetin.',
+            'İşletmenizde kullandığınız hizmet ve ürün kayıtlarını yönetin.',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -31,13 +37,6 @@ class DefinitionsMenuPage extends StatelessWidget {
             title: 'Ürünler',
             description: 'Satış ürünlerini, fiyatlarını ve stoklarını yönetin.',
             onTap: () => context.pushNamed(AppRouteNames.products),
-          ),
-          const SizedBox(height: 12),
-          _DefinitionCard(
-            icon: Icons.people_outline_rounded,
-            title: 'Müşteriler',
-            description: 'Müşteri iletişim bilgilerini ve durumlarını yönetin.',
-            onTap: () => context.pushNamed(AppRouteNames.customers),
           ),
         ],
       ),

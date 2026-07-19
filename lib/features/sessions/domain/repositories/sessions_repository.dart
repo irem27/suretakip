@@ -20,6 +20,17 @@ abstract interface class SessionsRepository {
 
   Future<List<SessionTimeEntry>> getSessionTimeEntries(String sessionId);
 
+  /// Birden çok seansın zaman kayıtları, seans kimliğine göre gruplanmış.
+  /// Açık işlem listelerinde canlı süre hesaplamak için tek sorguda çekilir.
+  Future<Map<String, List<SessionTimeEntry>>> getTimeEntriesForSessions(
+    List<String> sessionIds,
+  );
+
+  /// Birden çok seansın ürün kalemleri, seans kimliğine göre gruplanmış.
+  Future<Map<String, List<SessionItem>>> getItemsForSessions(
+    List<String> sessionIds,
+  );
+
   Future<String> startSession({
     required String businessId,
     required String serviceId,

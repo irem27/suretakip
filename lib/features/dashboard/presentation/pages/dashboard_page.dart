@@ -25,7 +25,6 @@ class DashboardPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentUser = ref.watch(currentUserProvider);
     final signOutState = ref.watch(signOutControllerProvider);
     final colorScheme = Theme.of(context).colorScheme;
     final scope = ref.watch(activeBusinessScopeProvider);
@@ -99,7 +98,7 @@ class DashboardPage extends ConsumerWidget {
           padding: const EdgeInsets.all(24),
           children: [
             Text(
-              'Hoş geldin${currentUser?.email == null ? '' : ', ${currentUser!.email}'}',
+              'Hoş geldiniz',
               style: Theme.of(
                 context,
               ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),

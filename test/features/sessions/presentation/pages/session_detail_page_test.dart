@@ -1,10 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
 import 'package:suretakip/core/errors/domain_exception.dart';
+import 'package:suretakip/core/value_objects/money.dart';
+import 'package:suretakip/features/payments/domain/entities/payment.dart';
+import 'package:suretakip/features/payments/domain/entities/payment_mutation_result.dart';
+import 'package:suretakip/features/payments/domain/entities/payment_input.dart';
+import 'package:suretakip/features/payments/domain/entities/refund_input.dart';
+import 'package:suretakip/features/payments/domain/entities/session_payment_summary.dart';
+import 'package:suretakip/features/payments/domain/entities/session_payment_status_summary.dart';
+import 'package:suretakip/features/payments/domain/repositories/payments_repository.dart';
+import 'package:suretakip/features/payments/presentation/controllers/payments_controller.dart';
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_time_entry.dart';
+import 'package:suretakip/features/sessions/domain/repositories/sessions_repository.dart';
 import 'package:suretakip/features/sessions/presentation/controllers/sessions_controllers.dart';
 import 'package:suretakip/features/sessions/presentation/pages/session_detail_page.dart';
 
@@ -130,6 +141,42 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
   });
+
+  testWidgets('tamamlama başarısından sonra dashboard yerine tahsilat açılır', (
+    tester,
+  ) async {
+    final sessions = _CompletingSessionsRepository();
+    tester.view.physicalSize = const Size(1200, 3200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sessionDetailProvider(
+            'session-1',
+          ).overrideWith((ref) => _activeState()),
+          sessionsRepositoryProvider.overrideWithValue(sessions),
+          paymentsRepositoryProvider.overrideWithValue(
+            _CheckoutPaymentsRepository(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: SessionDetailPage(sessionId: 'session-1'),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('İşlemi Tamamla'));
+    await tester.pump();
+    await tester.tap(find.text('Onayla ve Tamamla'));
+    await tester.pumpAndSettle();
+
+    expect(sessions.completeCalls, 1);
+    expect(find.text('Tahsilat'), findsOneWidget);
+    expect(find.byTooltip('Ödeme yapmadan kapat'), findsOneWidget);
+  });
 }
 
 Future<void> _pump(WidgetTester tester, SessionDetailState state) async {
@@ -250,4 +297,64 @@ Session _session({
   notes: null,
   createdAt: DateTime.utc(2026, 7, 17, 12),
   updatedAt: DateTime.utc(2026, 7, 17, 12),
+);
+
+class _CompletingSessionsRepository implements SessionsRepository {
+  var completeCalls = 0;
+
+  @override
+  Future<String> completeSession({
+    required String sessionId,
+    int discountMinor = 0,
+    int taxMinor = 0,
+  }) async {
+    completeCalls++;
+    return sessionId;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _CheckoutPaymentsRepository implements PaymentsRepository {
+  @override
+  Future<SessionPaymentSummary> getSessionPaymentSummary(
+    String sessionId,
+  ) async => _checkoutSummary;
+
+  @override
+  Future<List<SessionPaymentStatusSummary>> getSessionsPaymentStatus(
+    List<String> sessionIds,
+  ) async => const [];
+
+  @override
+  Future<PaymentMutationResult> recordSessionPayment(
+    PaymentInput input,
+  ) async => PaymentMutationResult(
+    summary: _checkoutSummary,
+    paymentId: 'payment-1',
+    replayed: false,
+  );
+
+  @override
+  Future<PaymentMutationResult> refundPayment(RefundInput input) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<PaymentMutationResult> voidPayment({
+    required String paymentId,
+    required String reason,
+  }) async => throw UnimplementedError();
+}
+
+final _checkoutSummary = SessionPaymentSummary(
+  sessionId: 'session-1',
+  sessionTotal: Money(minorUnits: 10500, currencyCode: 'TRY'),
+  collected: Money.zero('TRY'),
+  refunded: Money.zero('TRY'),
+  netPaid: Money.zero('TRY'),
+  remaining: Money(minorUnits: 10500, currencyCode: 'TRY'),
+  paymentStatus: SessionPaymentStatus.unpaid,
+  currencyCode: 'TRY',
+  payments: const [],
 );

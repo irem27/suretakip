@@ -2,12 +2,37 @@ import 'package:suretakip/core/value_objects/money.dart';
 
 final class RevenuePeriodSummary {
   const RevenuePeriodSummary({
-    required this.revenue,
+    required this.finalizedSales,
+    required this.collection,
     required this.completedCount,
   });
 
-  final Money revenue;
+  final Money finalizedSales;
+  final CollectionPeriodSummary collection;
   final int completedCount;
+
+  @Deprecated('Kesinleşen satış için finalizedSales kullanın.')
+  Money get revenue => finalizedSales;
+}
+
+final class CollectionPeriodSummary {
+  const CollectionPeriodSummary({
+    required this.netCollected,
+    required this.cashCollected,
+    required this.cardCollected,
+    required this.bankTransferCollected,
+    required this.otherCollected,
+    required this.refunded,
+    required this.outstanding,
+  });
+
+  final Money netCollected;
+  final Money cashCollected;
+  final Money cardCollected;
+  final Money bankTransferCollected;
+  final Money otherCollected;
+  final Money refunded;
+  final Money outstanding;
 }
 
 final class NamedMoneyRanking {

@@ -13,7 +13,7 @@ void main() {
   testWidgets('rapor metrikleri semantik etiketlidir ve 2.0x yazıda taşmaz', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(320, 900);
+    tester.view.physicalSize = const Size(320, 1800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -36,9 +36,16 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(
-      find.bySemanticsLabel(RegExp(r'Bugün: .*125,00, 2 tamamlanan işlem\.')),
+      find.bySemanticsLabel(RegExp(r'Bugün: kesinleşen satış')),
       findsOneWidget,
     );
+    expect(find.text('Kesinleşen satış'), findsWidgets);
+    expect(find.text('Net tahsilat'), findsWidgets);
+    expect(find.textContaining('125,00'), findsWidgets);
+    expect(find.textContaining('115,00'), findsWidgets);
+    await tester.drag(find.byType(ListView), const Offset(0, -4000));
+    await tester.pumpAndSettle();
+    expect(find.text('Bu ay tahsilat dağılımı'), findsOneWidget);
   });
 }
 
@@ -63,9 +70,23 @@ class _FakeReportsRepository implements ReportsRepository {
 }
 
 RevenuePeriodSummary _period(int amount, int count) => RevenuePeriodSummary(
-  revenue: Money(minorUnits: amount, currencyCode: 'TRY'),
+  finalizedSales: Money(minorUnits: amount, currencyCode: 'TRY'),
+  collection: _collection(amount - 1000),
   completedCount: count,
 );
+
+CollectionPeriodSummary _collection(int amount) {
+  final zero = Money.zero('TRY');
+  return CollectionPeriodSummary(
+    netCollected: Money(minorUnits: amount, currencyCode: 'TRY'),
+    cashCollected: Money(minorUnits: amount, currencyCode: 'TRY'),
+    cardCollected: zero,
+    bankTransferCollected: zero,
+    otherCollected: zero,
+    refunded: zero,
+    outstanding: Money(minorUnits: 1000, currencyCode: 'TRY'),
+  );
+}
 
 Business _business() => Business(
   id: 'business-1',

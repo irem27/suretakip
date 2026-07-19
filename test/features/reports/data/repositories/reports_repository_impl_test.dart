@@ -15,6 +15,7 @@ void main() {
 
     expect(overview.today.revenue.minorUnits, 15500);
     expect(overview.today.completedCount, 2);
+    expect(overview.today.collection.netCollected.minorUnits, 12000);
     expect(overview.week.revenue.minorUnits, 40000);
     expect(overview.month.revenue.minorUnits, 120000);
     expect(overview.monthServiceRevenue.minorUnits, 90000);
@@ -83,6 +84,47 @@ class _FakeReportsDataSource implements ReportsRemoteDataSource {
   @override
   Future<List<Map<String, dynamic>>> revenueSummary(String businessId) async =>
       summaryRows;
+
+  @override
+  Future<List<Map<String, dynamic>>> collectionSummary(
+    String businessId,
+  ) async => summaryRows.isEmpty
+      ? const []
+      : const [
+          {
+            'period': 'day',
+            'finalized_sales_minor': 15500,
+            'net_collected_minor': 12000,
+            'cash_collected_minor': 7000,
+            'card_collected_minor': 5000,
+            'bank_transfer_collected_minor': 0,
+            'other_collected_minor': 0,
+            'refunded_minor': 1000,
+            'outstanding_minor': 3500,
+          },
+          {
+            'period': 'week',
+            'finalized_sales_minor': 40000,
+            'net_collected_minor': 35000,
+            'cash_collected_minor': 20000,
+            'card_collected_minor': 15000,
+            'bank_transfer_collected_minor': 0,
+            'other_collected_minor': 0,
+            'refunded_minor': 0,
+            'outstanding_minor': 5000,
+          },
+          {
+            'period': 'month',
+            'finalized_sales_minor': 120000,
+            'net_collected_minor': 100000,
+            'cash_collected_minor': 60000,
+            'card_collected_minor': 30000,
+            'bank_transfer_collected_minor': 8000,
+            'other_collected_minor': 2000,
+            'refunded_minor': 5000,
+            'outstanding_minor': 20000,
+          },
+        ];
 
   @override
   Future<List<Map<String, dynamic>>> topServices({

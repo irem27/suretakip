@@ -17,6 +17,16 @@ class ReportsRemoteDataSource {
     return (result as List).cast<Map<String, dynamic>>();
   }
 
+  Future<List<Map<String, dynamic>>> collectionSummary(
+    String businessId,
+  ) async {
+    final result = await _client.rpc(
+      AppConstants.reportCollectionSummaryRpc,
+      params: {'p_business_id': businessId},
+    );
+    return (result as List).cast<Map<String, dynamic>>();
+  }
+
   Future<List<Map<String, dynamic>>> topServices({
     required String businessId,
     required String period,

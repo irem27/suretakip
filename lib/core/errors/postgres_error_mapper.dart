@@ -151,6 +151,11 @@ abstract final class PostgresErrorMapper {
           code: key,
           cause: cause,
         ),
+        'payment_not_found' => NotFoundException(
+          'Ödeme kaydı bulunamadı.',
+          code: key,
+          cause: cause,
+        ),
         'service_not_available' => NotFoundException(
           'Hizmet bulunamadı veya kullanıma açık değil.',
           code: key,
@@ -188,6 +193,53 @@ abstract final class PostgresErrorMapper {
         ),
         'session_already_cancelled' => ConflictException(
           'Bu işlem daha önce iptal edilmiş.',
+          code: key,
+          cause: cause,
+        ),
+        // ---- Ödeme ve tahsilat (20260719120000) ----
+        'payment_amount_invalid' => ValidationException(
+          'Ödeme tutarı sıfırdan büyük olmalıdır.',
+          code: key,
+          cause: cause,
+        ),
+        'payment_idempotency_key_required' => ValidationException(
+          'Ödeme isteği için geçerli bir işlem anahtarı gereklidir.',
+          code: key,
+          cause: cause,
+        ),
+        'payment_idempotency_key_reused' => ConflictException(
+          'Bu ödeme referansı başka bir işlem için zaten kullanılmış. '
+          'Lütfen yeni bir ödeme başlatın.',
+          code: key,
+          cause: cause,
+        ),
+        'payment_reason_required' => ValidationException(
+          'İptal veya iade gerekçesi boş bırakılamaz.',
+          code: key,
+          cause: cause,
+        ),
+        'payment_kind_not_voidable' => ValidationException(
+          'İade kayıtları iptal edilemez.',
+          code: key,
+          cause: cause,
+        ),
+        'payment_exceeds_balance' => ConflictException(
+          'Ödeme tutarı kalan bakiyeyi aşıyor.',
+          code: key,
+          cause: cause,
+        ),
+        'refund_exceeds_refundable' => ConflictException(
+          'İade tutarı iade edilebilir bakiyeyi aşıyor.',
+          code: key,
+          cause: cause,
+        ),
+        'payment_already_voided' => ConflictException(
+          'Bu ödeme daha önce iptal edilmiş.',
+          code: key,
+          cause: cause,
+        ),
+        'session_not_payable' => ConflictException(
+          'Yalnızca tamamlanmış işlemler için ödeme alınabilir.',
           code: key,
           cause: cause,
         ),
@@ -264,16 +316,26 @@ abstract final class PostgresErrorMapper {
     'member_not_found',
     'not_a_member',
     'not_authorized',
+    'payment_already_voided',
+    'payment_amount_invalid',
+    'payment_exceeds_balance',
+    'payment_idempotency_key_required',
+    'payment_idempotency_key_reused',
+    'payment_kind_not_voidable',
+    'payment_not_found',
+    'payment_reason_required',
     'product_not_available',
     'service_not_available',
     'session_already_cancelled',
     'session_not_active',
     'session_not_found',
     'session_not_open',
+    'session_not_payable',
     'session_not_paused',
     'stock_quantity_direct_write_denied',
     'target_member_inactive',
     'user_id_required',
     'user_not_found',
+    'refund_exceeds_refundable',
   };
 }

@@ -3,11 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/router/app_routes.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
 import 'package:suretakip/core/errors/domain_exception.dart';
 import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
+import 'package:suretakip/features/payments/presentation/controllers/payments_controller.dart';
+import 'package:suretakip/features/payments/presentation/widgets/payment_summary_panel.dart';
+import 'package:suretakip/features/payments/presentation/widgets/session_payment_sheet.dart';
 import 'package:suretakip/features/sessions/presentation/controllers/sessions_controllers.dart';
 import 'package:suretakip/features/sessions/presentation/utils/session_presentation_utils.dart';
 import 'package:suretakip/features/sessions/presentation/widgets/product_picker_sheet.dart';
@@ -52,6 +56,12 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
   Widget build(BuildContext context) {
     final detail = ref.watch(sessionDetailProvider(widget.sessionId));
     final action = ref.watch(sessionActionsControllerProvider);
+    final canManagePayments =
+        ref
+            .watch(businessCapabilitiesProvider)
+            .valueOrNull
+            ?.canCancelCompletedSession ??
+        false;
     return Scaffold(
       appBar: AppBar(
         title: const Text('İşlem Detayı'),
@@ -72,6 +82,7 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
           data: (data) => _DetailContent(
             data: data,
             loading: action.isLoading,
+            canManagePayments: canManagePayments,
             onTogglePause: () => _togglePause(data.session.status),
             onAddProduct: () => showProductPickerSheet(
               context,
@@ -79,6 +90,8 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
               currencyCode: data.session.currencyCodeSnapshot,
             ),
             onComplete: () => _confirmComplete(data),
+            onCollect: () =>
+                showSessionPaymentSheet(context, sessionId: widget.sessionId),
             onCancel: _confirmCancel,
           ),
         ),
@@ -135,7 +148,8 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
         .complete(sessionId: widget.sessionId);
     if (!mounted) return;
     if (success) {
-      context.goNamed(AppRouteNames.dashboard);
+      ref.invalidate(sessionPaymentControllerProvider(widget.sessionId));
+      await showSessionPaymentSheet(context, sessionId: widget.sessionId);
     } else {
       _showActionError('İşlem tamamlanamadı.');
     }
@@ -187,17 +201,21 @@ class _DetailContent extends StatelessWidget {
   const _DetailContent({
     required this.data,
     required this.loading,
+    required this.canManagePayments,
     required this.onTogglePause,
     required this.onAddProduct,
     required this.onComplete,
+    required this.onCollect,
     required this.onCancel,
   });
 
   final SessionDetailState data;
   final bool loading;
+  final bool canManagePayments;
   final VoidCallback onTogglePause;
   final VoidCallback onAddProduct;
   final VoidCallback onComplete;
+  final VoidCallback onCollect;
   final VoidCallback onCancel;
 
   @override
@@ -302,6 +320,21 @@ class _DetailContent extends StatelessWidget {
             grandMinor: session.grandTotalMinor ?? 0,
             currency: session.currencyCodeSnapshot,
           ),
+        if (isCompleted) ...[
+          const SizedBox(height: 20),
+          Text(
+            'Ödeme',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          PaymentSummaryPanel(
+            sessionId: session.id,
+            canManage: canManagePayments,
+            onCollect: onCollect,
+          ),
+        ],
         const SizedBox(height: 16),
         if (isOpen)
           Wrap(

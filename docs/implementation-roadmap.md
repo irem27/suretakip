@@ -469,6 +469,40 @@ Yapılacaklar:
 - [ ] Release build gerçek backend'e bağlanıp login/session/tamamlama smoke testini geçer.
 - [ ] Açık P0/P1 hata yoktur.
 
+### Faz 8.5 — Ödeme ve tahsilat (tamamlandı: 2026-07-19)
+
+Amaç: "Müşteri ne kadar borçlandı" ile "ne kadarı fiilen tahsil edildi"yi ayırmak.
+
+Yapılanlar:
+
+- [x] **Kontrat önce**: `docs/contracts/payment-contract.md` — tablo, RPC, hata
+      kodu, yetki matrisi, JSON şekli. Flutter buna karşı yazıldı.
+- [x] ADR 0002 — model kararları ve reddedilen alternatifler.
+- [x] Migration `20260719120000_payments.sql`: `payments`,
+      `payment_allocations`, `payment_events` + 3 enum; composite FK'lerle
+      tenant izolasyonu; append-only denetim.
+- [x] RPC'ler: `record_session_payment`, `get_session_payment_summary`,
+      `void_payment`, `refund_payment` — `security definer`, `FOR UPDATE`,
+      tek transaction.
+- [x] Migration `20260719130000_payment_reports.sql`:
+      `report_collection_summary` — satış ile tahsilat **ayrı** döner.
+- [x] RLS + GRANT: yalnızca SELECT; yazma yolu hiç açılmadı (fail-closed).
+- [x] SQL testleri 52-74 (toplam 74/74 geçti).
+- [x] `payment_concurrency_test.sh` — iki gerçek bağlantıyla aşırı ödeme koruması.
+- [x] Flutter: `lib/features/payments/` veri katmanı, controller, checkout akışı,
+      seans detayı, geçmiş rozetleri, rapor sunumu.
+
+Çalışma sırasında yakalanan iki gerçek hata (ikisi de düzeltildi ve
+regresyon testi yazıldı):
+
+1. **Hayalet hata kodu** — kontrat `payment_currency_mismatch` tanımlıyordu
+   ama RPC para birimini seanstan kopyaladığı için bu durum yapısal olarak
+   imkansızdı. Kod kaldırıldı, gerekçe kontrata yazıldı.
+2. **Sessiz ödeme kaybı** — idempotency anahtarı başka bir seans için
+   yeniden kullanılırsa istek "başarılı + replayed" dönüyor ama ikinci seans
+   hiç ödenmiyordu. `payment_idempotency_key_reused` guard'ı eklendi
+   (test 73-74).
+
 ### Faz 9 — Offline-first hazırlığı (MVP sonrası)
 
 Amaç: Online MVP'yi bozmadan güvenli yerel çalışma ve senkronizasyon tasarlamak.

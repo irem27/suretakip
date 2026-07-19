@@ -4,6 +4,8 @@ import 'package:suretakip/core/constants/app_constants.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
 import 'package:suretakip/core/utils/business_date_ranges.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
+import 'package:suretakip/features/payments/domain/entities/payment.dart';
+import 'package:suretakip/features/payments/presentation/controllers/payments_controller.dart';
 import 'package:suretakip/features/services/domain/entities/service.dart';
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_history_filter.dart';
@@ -21,6 +23,7 @@ final class HistoryState {
     required this.serviceId,
     required this.status,
     required this.serverLocalDate,
+    required this.paymentStatuses,
   });
 
   final List<Session> sessions;
@@ -32,6 +35,7 @@ final class HistoryState {
   final String? serviceId;
   final HistoryStatusFilter status;
   final DateTime serverLocalDate;
+  final Map<String, SessionPaymentStatus> paymentStatuses;
 
   String customerName(String? id) {
     if (id == null) return 'Misafir Müşteri';
@@ -103,9 +107,11 @@ class HistoryController
         serviceId: null,
         status: _status,
         serverLocalDate: now,
+        paymentStatuses: const {},
       );
     }
     final repository = ref.watch(sessionsRepositoryProvider);
+    final paymentsRepository = ref.watch(paymentsRepositoryProvider);
     final serverNow = await repository.serverNow();
     _serverLocalDate ??= BusinessDateRanges.localDate(
       instant: serverNow,
@@ -136,6 +142,13 @@ class HistoryController
         },
       ),
     );
+    final completedSessionIds = sessions
+        .where((session) => session.status == SessionStatus.completed)
+        .map((session) => session.id)
+        .toList(growable: false);
+    final paymentSummaries = await paymentsRepository.getSessionsPaymentStatus(
+      completedSessionIds,
+    );
     await optionsFuture;
     return HistoryState(
       sessions: sessions,
@@ -147,6 +160,10 @@ class HistoryController
       serviceId: _serviceId,
       status: _status,
       serverLocalDate: _serverLocalDate!,
+      paymentStatuses: {
+        for (final summary in paymentSummaries)
+          summary.sessionId: summary.paymentStatus,
+      },
     );
   }
 

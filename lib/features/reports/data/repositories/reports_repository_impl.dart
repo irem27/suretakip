@@ -25,8 +25,15 @@ class ReportsRepositoryImpl implements ReportsRepository {
     const period = 'month';
     const limit = AppConstants.reportRankingLimit;
     // Tüm aggregate işi DB'de; 4 RPC paralel çağrılır, client toplama yapmaz.
-    final (summaryRows, serviceRows, productRows, customerRows) = await (
+    final (
+      summaryRows,
+      collectionRows,
+      serviceRows,
+      productRows,
+      customerRows,
+    ) = await (
       _dataSource.revenueSummary(businessId),
+      _dataSource.collectionSummary(businessId),
       _dataSource.topServices(
         businessId: businessId,
         period: period,
@@ -47,13 +54,30 @@ class ReportsRepositoryImpl implements ReportsRepository {
     final byPeriod = {
       for (final row in summaryRows) row['period'] as String: row,
     };
+    final collectionsByPeriod = {
+      for (final row in collectionRows) row['period'] as String: row,
+    };
+
+    Money money(Object? value) =>
+        Money(minorUnits: _int(value), currencyCode: currencyCode);
 
     RevenuePeriodSummary summaryOf(String key) {
       final row = byPeriod[key];
+      final collection = collectionsByPeriod[key];
       return RevenuePeriodSummary(
-        revenue: Money(
-          minorUnits: _int(row?['grand_total_minor']),
-          currencyCode: currencyCode,
+        finalizedSales: money(
+          collection?['finalized_sales_minor'] ?? row?['grand_total_minor'],
+        ),
+        collection: CollectionPeriodSummary(
+          netCollected: money(collection?['net_collected_minor']),
+          cashCollected: money(collection?['cash_collected_minor']),
+          cardCollected: money(collection?['card_collected_minor']),
+          bankTransferCollected: money(
+            collection?['bank_transfer_collected_minor'],
+          ),
+          otherCollected: money(collection?['other_collected_minor']),
+          refunded: money(collection?['refunded_minor']),
+          outstanding: money(collection?['outstanding_minor']),
         ),
         completedCount: _int(row?['completed_count']),
       );

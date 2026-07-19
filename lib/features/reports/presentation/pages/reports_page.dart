@@ -64,14 +64,14 @@ class _ReportContent extends StatelessWidget {
     padding: const EdgeInsets.all(16),
     children: [
       Text(
-        'Gelir özeti',
+        'Satış ve tahsilat özeti',
         style: Theme.of(
           context,
         ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
       ),
       const SizedBox(height: 4),
       Text(
-        'Dönemler işletmenizin saat dilimine ve sunucu saatine göre hesaplanır.',
+        'Kesinleşen satış müşteriye yazılan toplamı, net tahsilat ise gerçekten alınan parayı gösterir. İkisi aynı olmak zorunda değildir.',
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
           color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
@@ -103,6 +103,8 @@ class _ReportContent extends StatelessWidget {
       ),
       const SizedBox(height: 20),
       _RevenueSplitCard(report: report),
+      const SizedBox(height: 12),
+      _CollectionBreakdownCard(collection: report.month.collection),
       const SizedBox(height: 20),
       _RankingCard(
         title: 'En çok kullanılan hizmetler',
@@ -158,12 +160,17 @@ class _RevenueCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final amount = formatSessionMoney(
-      summary.revenue.minorUnits,
-      summary.revenue.currencyCode,
+      summary.finalizedSales.minorUnits,
+      summary.finalizedSales.currencyCode,
+    );
+    final collected = formatSessionMoney(
+      summary.collection.netCollected.minorUnits,
+      summary.collection.netCollected.currencyCode,
     );
     return Semantics(
       container: true,
-      label: '$label: $amount, ${summary.completedCount} tamamlanan işlem.',
+      label:
+          '$label: kesinleşen satış $amount, net tahsilat $collected, ${summary.completedCount} tamamlanan işlem.',
       excludeSemantics: true,
       child: Card(
         child: Padding(
@@ -190,10 +197,29 @@ class _RevenueCard extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
+                'Kesinleşen satış',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 4),
+              Text(
                 amount,
                 softWrap: true,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Net tahsilat',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                collected,
+                softWrap: true,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ),
               Text(
@@ -221,7 +247,7 @@ class _RevenueSplitCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Bu ay gelir dağılımı',
+            'Bu ay kesinleşen satış dağılımı',
             style: Theme.of(
               context,
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -230,6 +256,50 @@ class _RevenueSplitCard extends StatelessWidget {
           _AmountRow(label: 'Hizmet geliri', money: report.monthServiceRevenue),
           const Divider(height: 24),
           _AmountRow(label: 'Ürün geliri', money: report.monthProductRevenue),
+        ],
+      ),
+    ),
+  );
+}
+
+class _CollectionBreakdownCard extends StatelessWidget {
+  const _CollectionBreakdownCard({required this.collection});
+
+  final CollectionPeriodSummary collection;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Bu ay tahsilat dağılımı',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          const Text('İadeler net tahsilattan düşülür.'),
+          const SizedBox(height: 16),
+          _AmountRow(label: 'Nakit', money: collection.cashCollected),
+          const Divider(height: 20),
+          _AmountRow(label: 'Kart', money: collection.cardCollected),
+          const Divider(height: 20),
+          _AmountRow(
+            label: 'Havale / EFT',
+            money: collection.bankTransferCollected,
+          ),
+          const Divider(height: 20),
+          _AmountRow(label: 'Diğer', money: collection.otherCollected),
+          const Divider(height: 20),
+          _AmountRow(label: 'İadeler', money: collection.refunded),
+          const Divider(height: 20),
+          _AmountRow(
+            label: 'Tahsil edilmemiş bakiye',
+            money: collection.outstanding,
+          ),
         ],
       ),
     ),

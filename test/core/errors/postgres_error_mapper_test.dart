@@ -3,6 +3,45 @@ import 'package:suretakip/core/errors/domain_exception.dart';
 import 'package:suretakip/core/errors/postgres_error_mapper.dart';
 
 void main() {
+  group('ödeme RPC hataları', () {
+    final cases = <(String, Type)>[
+      ('payment_amount_invalid', ValidationException),
+      ('payment_idempotency_key_required', ValidationException),
+      ('payment_idempotency_key_reused', ConflictException),
+      ('payment_reason_required', ValidationException),
+      ('payment_kind_not_voidable', ValidationException),
+      ('payment_exceeds_balance', ConflictException),
+      ('refund_exceeds_refundable', ConflictException),
+      ('payment_already_voided', ConflictException),
+      ('session_not_payable', ConflictException),
+      ('payment_not_found', NotFoundException),
+    ];
+
+    for (final (code, expectedType) in cases) {
+      test('$code doğru domain hatasına Türkçe mesajla eşlenir', () {
+        final exception = PostgresErrorMapper.map(message: code, code: 'P0001');
+
+        expect(exception.runtimeType, expectedType);
+        expect(exception.code, code);
+        expect(exception.message, isNot(code));
+        expect(exception.message, matches(RegExp('[çğıöşüÇĞİÖŞÜ]')));
+      });
+    }
+  });
+
+  test(
+    'yeniden kullanılan ödeme referansı yeni ödeme başlatmaya yönlendirir',
+    () {
+      final exception = PostgresErrorMapper.map(
+        message: 'payment_idempotency_key_reused',
+      );
+
+      expect(exception, isA<ConflictException>());
+      expect(exception.message, contains('başka bir işlem'));
+      expect(exception.message, contains('yeni bir ödeme'));
+    },
+  );
+
   test('insufficient_stock hatasını conflict olarak eşler', () {
     final exception = PostgresErrorMapper.map(message: 'insufficient_stock');
 

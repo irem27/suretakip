@@ -9,6 +9,8 @@ import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
 import 'package:suretakip/core/utils/business_date_ranges.dart';
 import 'package:suretakip/features/history/presentation/controllers/history_controller.dart';
+import 'package:suretakip/features/payments/domain/entities/payment.dart';
+import 'package:suretakip/features/payments/presentation/widgets/payment_status_badge.dart';
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
 import 'package:suretakip/features/sessions/presentation/utils/session_presentation_utils.dart';
 import 'package:suretakip/features/sessions/presentation/widgets/session_status_chip.dart';
@@ -103,6 +105,7 @@ class HistoryPage extends ConsumerWidget {
                       session: session,
                       customerName: data.customerName(session.customerId),
                       timezone: timezone,
+                      paymentStatus: data.paymentStatuses[session.id],
                     ),
               ],
             ),
@@ -258,11 +261,13 @@ class _HistorySessionCard extends StatelessWidget {
     required this.session,
     required this.customerName,
     required this.timezone,
+    required this.paymentStatus,
   });
 
   final Session session;
   final String customerName;
   final String timezone;
+  final SessionPaymentStatus? paymentStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -308,6 +313,8 @@ class _HistorySessionCard extends StatelessWidget {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     SessionStatusChip(status: session.status),
+                    if (paymentStatus != null)
+                      PaymentStatusBadge(status: paymentStatus!),
                     if (amount != null)
                       Text(
                         amount,

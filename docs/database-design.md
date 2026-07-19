@@ -38,7 +38,38 @@ erDiagram
   products |o--o{ session_items : "snapshot ile"
   products ||--o{ inventory_movements : "stok ledger'ı"
   session_items |o--o| inventory_movements : "sale / sale_reversal"
+  businesses ||--o{ payments : ""
+  customers |o--o{ payments : "opsiyonel"
+  business_members ||--o{ payments : "received_by / voided_by"
+  payments |o--o{ payments : "iade → orijinal tahsilat"
+  payments ||--o{ payment_allocations : "hangi seansa mahsup"
+  sessions ||--o{ payment_allocations : "tahsilat/iade"
+  payments ||--o{ payment_events : "denetim (append-only)"
 ```
+
+### 2.1 Ödeme tabloları *(eklendi: 2026-07-19)*
+
+**Satış ≠ tahsilat.** `sessions.grand_total_minor` "müşteri ne kadar
+borçlandı"yı, `payments` + `payment_allocations` "ne kadarı fiilen tahsil
+edildi"yi tutar. **Tamamlanmış seans ödenmiş demek değildir.**
+
+| Tablo | Rolü | Kritik invariant |
+|---|---|---|
+| `payments` | Tahsilat ve iade kayıtları | `amount_minor > 0` **her zaman** (yönü `payment_kind` taşır); `unique(business_id, idempotency_key)`; iade orijinaline bağlı olmak zorunda; iptalliyse gerekçe+kim+ne zaman üçü de dolu |
+| `payment_allocations` | Ödemenin hangi seansa mahsup edildiği | Ayrı tablo olması, ileride tek ödemenin çok seansa bölünmesini şema değişikliği olmadan mümkün kılar |
+| `payment_events` | Append-only denetim izi | UPDATE/DELETE yetkisi **hiçbir role** verilmez (`inventory_movements` deseni) |
+
+Seansın ödeme durumu (`unpaid` / `partially_paid` / `paid`) **saklanmaz,
+türetilir**: `net = tahsilat − iade`, iptal edilmiş (`voided`) ödemeler
+hiçbir toplama girmez. `remaining_minor` asla negatif olmaz.
+Gerekçe: ADR 0002 §2.
+
+Tüm çocuk referanslar composite FK `(x_id, business_id)` ile kurulur —
+başka işletmenin müşterisine/personeline/ödemesine bağlanmak **veritabanı
+seviyesinde imkansızdır**.
+
+Ayrıntılı kontrat: `docs/contracts/payment-contract.md`
+Karar gerekçeleri: `docs/adr/0002-payment-and-collection-model.md`
 
 ## 3. RPC Kataloğu
 
@@ -55,6 +86,10 @@ erDiagram
 | `add_product_to_session(session, product, qty, discount?, tax?)` | Snapshot'lı satır + sale movement | Ürün `FOR UPDATE` kilidi, stok kontrolü, currency eşleşmesi |
 | `complete_session(session, discount?, tax?)` | Süre→ücret hesabı, toplamlar, `completed` | `FOR UPDATE` + status şartı → çifte tamamlama imkansız |
 | `cancel_session(session)` | Stok iadesi + `cancelled` | Tamamlanmışı yalnız owner/admin iptal eder; iade satır başına 1 kez (partial unique + on conflict) |
+| `record_session_payment(session, method, amount, idem_key, ref?, note?)` *(eklendi: 2026-07-19)* | Tahsilat + tahsis + denetim olayı (tek tx) | Seans `FOR UPDATE` kilidi; kalan bakiye **kilidin altında** yeniden hesaplanır → eşzamanlı cihazlar bakiyeyi aşamaz. Yalnız `completed` seans ödenebilir. Aynı idempotency key ikinci ödeme üretmez (`replayed: true` döner). owner/admin/**staff** |
+| `get_session_payment_summary(session)` *(eklendi: 2026-07-19)* | Ödeme özeti + güvenli geçmiş | Aktif üyelik şartı; başka tenant'ın seansı varlığını sızdırmadan `session_not_found` döner. E-posta/user_id dönmez |
+| `void_payment(payment, reason)` *(eklendi: 2026-07-19)* | Tahsilatı geçersiz kılar | **owner/admin**; gerekçe zorunlu; kayıt **silinmez** (`status='voided'`), net toplamdan çıkar, denetim olayı yazılır; ikinci iptal `payment_already_voided`. İade kayıtları iptal edilemez |
+| `refund_payment(payment, amount, idem_key, reason)` *(eklendi: 2026-07-19)* | Kısmi/tam iade | **owner/admin**; orijinal `FOR UPDATE`; iade edilebilir tutar aşılamaz; orijinal kayıt **değiştirilmez/silinmez**, iade **yeni** kayıttır; ayrı idempotency key zorunlu |
 
 ## 4. Örnek Kullanım
 
@@ -97,7 +132,10 @@ select transfer_business_ownership(:business_id, :to_member_id);
 4. **Fiyat/ad/para birimi değişimi:** Geçmiş seans snapshot kolonlarından okur — test 14 bunu doğrular.
 5. **Admin yetki yükseltmesi:** Admin, owner satırı oluşturamaz/değiştiremez/silemez (policy'de `role <> 'owner'` guard'ı).
 6. **Currency karışması:** `add_product_to_session` ürün para birimini seans snapshot'ıyla karşılaştırır → `currency_mismatch`.
-7. **Müşteri partial unique önerisi (uygulanmadı):** Aynı işletmede e-posta tekilliği istenirse: `create unique index on customers (business_id, lower(email)) where email is not null;` — telefon paylaşan aile müşterileri gibi gerçek hayat durumları yüzünden şimdilik zorlanmadı.
+7. **Aşırı ödeme (eşzamanlı):** İki cihaz aynı anda ödeme girerse `record_session_payment` seansı `FOR UPDATE` ile kilitler; ikinci istek bekler, uyanınca kalan bakiyeyi **yeniden okur** ve aşım varsa reddeder. `payment_concurrency_test.sh` bunu iki gerçek bağlantıyla doğrular.
+8. **Çift ödeme (ağ tekrarı):** `unique(business_id, idempotency_key)`. Tekrar isteği yeni kayıt açmaz, mevcut sonucu `replayed: true` ile döner; tam eşzamanlı çakışmada `unique_violation` yakalanır ve yine tek ödeme kalır.
+9. **İade sonrası durum:** 450 ödendi → `paid`; 100 iade → net 350 → **`partially_paid`**, kalan 100. Durum saklanmadığı (türetildiği) için bu geçiş kendiliğinden doğrudur; güncellenmeyi unutan bir kolon yoktur.
+10. **Müşteri partial unique önerisi (uygulanmadı):** Aynı işletmede e-posta tekilliği istenirse: `create unique index on customers (business_id, lower(email)) where email is not null;` — telefon paylaşan aile müşterileri gibi gerçek hayat durumları yüzünden şimdilik zorlanmadı.
 
 ## 6. Rollback Notları
 
@@ -109,4 +147,8 @@ select transfer_business_ownership(:business_id, :to_member_id);
 
 ## 7. Test Paketi
 
-`supabase/tests/rls_test.sql` — **51 senaryo**: tenant izolasyonu, rol matrisi, RPC durum makinesi, stok ledger/cache tutarlılığı, snapshot bağımsızlığı, constraint'ler ve 2026-07-18 güvenlik sıkılaştırmasının pozitif/negatif testleri (29-51: doğrudan `stock_quantity` yazma reddi, kaldırılan onboarding RPC'si, son owner invariantı, admin yetki yükseltme koruması, tenant sınırı, atomik sahiplik devri). Çalıştırma komutu dosyanın başında. Eşzamanlılık senaryosu (iki paralel bağlantı) tek transaction'lık psql testinde birebir simüle edilemez; garanti `FOR UPDATE` + check constraint katmanlarındadır (Edge Case 1).
+`supabase/tests/rls_test.sql` — **70 senaryo**: tenant izolasyonu, rol matrisi, RPC durum makinesi, stok ledger/cache tutarlılığı, snapshot bağımsızlığı, constraint'ler ve 2026-07-18 güvenlik sıkılaştırmasının pozitif/negatif testleri (29-51: doğrudan `stock_quantity` yazma reddi, kaldırılan onboarding RPC'si, son owner invariantı, admin yetki yükseltme koruması, tenant sınırı, atomik sahiplik devri). Çalıştırma komutu dosyanın başında.
+
+**52-70 — ödeme ve tahsilat** *(eklendi: 2026-07-19)*: tamamlanan seansın ödenmemiş başlaması, staff'ın tahsil edip iptal/iade edememesi, owner/admin'in iptal ve iade edebilmesi, aşırı ödeme reddi, bölünmüş ödemenin `paid`'e ulaşması, kısmi ödemenin `partially_paid` dönmesi, idempotency ile tek ödeme, iptal edilen ödemenin net toplamdan çıkması ve **silinmemesi**, iade edilebilir tutarın aşılamaması, denetim olaylarının yazılması, aktif/iptal seansın ödenememesi, çapraz tenant okuma/mutasyon/özet reddi, doğrudan INSERT/UPDATE/DELETE reddi. Bu blok kendi işletmesini (B3) kurar; yukarıdaki testlerin son durumuna bağımlı değildir.
+
+`supabase/tests/payment_concurrency_test.sh` — **gerçek iki bağlantılı eşzamanlılık testi** *(eklendi: 2026-07-19)*. Tek transaction'lık psql paketi iki cihazı simüle edemediği için ayrı bir harness yazıldı: A bağlantısı ödemeyi açık transaction'da tutar, B aynı anda dener ve `FOR UPDATE` kilidinde **bloke olur**; A commit edince B uyanır, kalan bakiyeyi **yeniden okur** ve `payment_exceeds_balance` ile reddedilir. Sonuç: tek ödeme, toplam aşılmaz. Test verisi çalışma sonunda tamamen silinir.

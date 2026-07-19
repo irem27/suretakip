@@ -275,6 +275,40 @@ Adımlar:
 - `flutter analyze` ve testler temiz
 - Staging ortamında kabul testleri geçmiş
 
+## Faz 8.5 - Ödeme ve Tahsilat (eklendi: 2026-07-19)
+
+Amaç: Seansın **satış tutarı** ile **fiilen tahsil edilen para**yı ayırmak.
+Tamamlanmış seans, ödenmiş demek değildir.
+
+Kapsam **dışı**: gerçek kart işleme, banka/POS entegrasyonu, Stripe/iyzico/PayTR,
+e-fatura, cüzdan/puan/kupon. Bu modül dışarıda alınmış parayı **kaydeder**.
+
+Adımlar:
+
+1. **Kontrat önce** — `docs/contracts/payment-contract.md` (tablo, RPC, hata kodu,
+   yetki matrisi, JSON şekli). Flutter implementasyonu bu kontrata karşı yazılır.
+2. Migration: `payments`, `payment_allocations`, `payment_events` (+ 3 enum),
+   composite FK'lerle tenant izolasyonu, append-only denetim.
+3. RPC'ler: `record_session_payment`, `get_session_payment_summary`,
+   `void_payment`, `refund_payment` — hepsi `security definer`, `FOR UPDATE`
+   kilitli, tek transaction.
+4. RLS + GRANT: yalnızca SELECT; yazma yolu **hiç** açılmaz.
+5. SQL testleri (52-70) + gerçek iki bağlantılı eşzamanlılık testi.
+6. Flutter: `lib/features/payments/` veri katmanı, controller, checkout akışı,
+   seans detayında ödeme durumu, geçmişte rozet, raporda tahsilat ayrımı.
+
+Çıkış kriteri:
+
+- Tamamlanmış seans ödenmemiş kalabiliyor
+- Kısmi ve çok yöntemli (nakit + kart + havale) ödeme çalışıyor
+- Aşırı ödeme **sunucuda** engelleniyor; eşzamanlı cihazlar bakiyeyi aşamıyor
+- Aynı idempotency key tek ödeme üretiyor
+- Staff tahsil ediyor; iptal/iade yalnızca owner/admin, denetim kaydıyla
+- Hiçbir ödeme kaydı fiziksel silinmiyor
+- Satış ve tahsilat raporda **ayrı** okunuyor
+
+---
+
 ## Faz 9 - Offline-First Geçiş Hazırlığı (Opsiyonel Sonraki Sprint)
 
 Amaç: Mevcut mimariyi bozmadan local cache/offline katmanına geçiş zemini hazırlamak.

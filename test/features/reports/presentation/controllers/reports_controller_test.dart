@@ -49,7 +49,20 @@ class _FakeReportsRepository implements ReportsRepository {
     this.currencyCode = currencyCode;
     this.timezone = timezone;
     final zero = Money.zero(currencyCode);
-    final period = RevenuePeriodSummary(revenue: zero, completedCount: 0);
+    final collection = CollectionPeriodSummary(
+      netCollected: zero,
+      cashCollected: zero,
+      cardCollected: zero,
+      bankTransferCollected: zero,
+      otherCollected: zero,
+      refunded: zero,
+      outstanding: zero,
+    );
+    final period = RevenuePeriodSummary(
+      finalizedSales: zero,
+      collection: collection,
+      completedCount: 0,
+    );
     return ReportOverview(
       today: period,
       week: period,

@@ -180,7 +180,8 @@ Kural:
 (güncellendi: 2026-07-17)
 
 - Tablolar: businesses, business_members, customers, services, products, sessions,
-  session_time_entries, session_items, inventory_movements.
+  session_time_entries, session_items, inventory_movements,
+  **payments, payment_allocations, payment_events** *(2026-07-19)*.
 - Roller: `owner / admin / staff` (~~manager/employee~~ adlandırması kaldırıldı).
 - RLS tüm tenant tablolarında aktif; yetki kontrolü business üyeliği üzerinden
   `security definer` helper fonksiyonlarla yapılır.
@@ -188,6 +189,14 @@ Kural:
   complete/cancel_session) — tümü tek transaction, FOR UPDATE kilitli.
 - Stok: append-only `inventory_movements` ledger'ı kaynak; `products.stock_quantity`
   trigger'ın güncellediği cache.
+- **Ödeme** *(2026-07-19)*: satış tutarı (`sessions.grand_total_minor`) ile tahsilat
+  (`payments`) **ayrı** kavramlardır; tamamlanmış seans ödenmiş demek değildir.
+  Ödeme durumu saklanmaz, `payment_allocations` üzerinden **türetilir**.
+  Yazma yalnızca RPC'lerle (`record_session_payment`, `void_payment`,
+  `refund_payment`); üç ödeme tablosuna hiçbir role insert/update/delete
+  grant'i verilmez, RLS'te yalnızca SELECT politikası vardır (fail-closed).
+  Kayıt fiziksel silinmez: iptal durum değişimi, iade yeni kayıttır.
+  Ayrıntı: `docs/contracts/payment-contract.md`, gerekçe: ADR 0002.
 - Bu maddelerin tamamı `supabase/migrations/` altında uygulanmış durumdadır.
 
 ## 11) Kodlama Standartları

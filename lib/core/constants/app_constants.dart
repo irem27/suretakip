@@ -38,7 +38,13 @@ class AppConstants {
   static const addProductToSessionRpc = 'add_product_to_session';
   static const completeSessionRpc = 'complete_session';
   static const cancelSessionRpc = 'cancel_session';
+  static const recordSessionPaymentRpc = 'record_session_payment';
+  static const getSessionPaymentSummaryRpc = 'get_session_payment_summary';
+  static const getSessionsPaymentStatusRpc = 'get_sessions_payment_status';
+  static const voidPaymentRpc = 'void_payment';
+  static const refundPaymentRpc = 'refund_payment';
   static const reportRevenueSummaryRpc = 'report_revenue_summary';
+  static const reportCollectionSummaryRpc = 'report_collection_summary';
   static const reportTopServicesRpc = 'report_top_services';
   static const reportTopProductsRpc = 'report_top_products';
   static const reportTopCustomersRpc = 'report_top_customers';

@@ -561,9 +561,7 @@ class _MetricCard extends StatelessWidget {
       excludeSemantics: true,
       child: Card(
         clipBehavior: Clip.antiAlias,
-        child: onTap == null
-            ? content
-            : InkWell(onTap: onTap, child: content),
+        child: onTap == null ? content : InkWell(onTap: onTap, child: content),
       ),
     );
   }

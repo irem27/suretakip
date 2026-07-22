@@ -107,9 +107,7 @@ void main() {
             ),
           ),
         ],
-        child: const MaterialApp(
-          home: Scaffold(body: ActiveSessionsSheet()),
-        ),
+        child: const MaterialApp(home: Scaffold(body: ActiveSessionsSheet())),
       ),
     );
     await tester.pumpAndSettle();

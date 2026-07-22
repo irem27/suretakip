@@ -387,6 +387,13 @@ select set_config('test.ali',
   (select id::text from public.customers
    where business_id = current_setting('test.b1')::uuid and name = 'Ali' limit 1), true);
 
+-- Deterministik rapor "as of": iş yeri gününün (Europe/Istanbul) ortası (öğlen).
+-- Fixture'lar ve rapor RPC çağrıları bu sabite bağlanır; böylece CI gece yarısı
+-- İstanbul saatine denk gelse bile seanslar aynı gün kovasında kalır (flaky yok).
+select set_config('test.report_asof',
+  ((date_trunc('day', now() at time zone 'Europe/Istanbul') at time zone 'Europe/Istanbul')
+     + interval '12 hours')::text, true);
+
 insert into public.sessions (
   business_id, customer_id, service_id, opened_by_member_id, closed_by_member_id,
   status, started_at, ended_at, charged_minutes,
@@ -397,7 +404,8 @@ insert into public.sessions (
   current_setting('test.b1')::uuid, current_setting('test.ali')::uuid,
   current_setting('test.s1')::uuid, current_setting('test.owner_member')::uuid,
   current_setting('test.owner_member')::uuid, 'completed',
-  now() - interval '20 min', now() - interval '10 min', 30,
+  current_setting('test.report_asof')::timestamptz - interval '20 min',
+  current_setting('test.report_asof')::timestamptz - interval '10 min', 30,
   'Koltuk', 250, 15, 10, 'TRY', 7500, 3000, 10500
 ) returning id as rsess1 \gset
 select set_config('test.rsess1', :'rsess1', true);
@@ -412,7 +420,8 @@ insert into public.sessions (
   current_setting('test.b1')::uuid, null,
   current_setting('test.s1')::uuid, current_setting('test.owner_member')::uuid,
   current_setting('test.owner_member')::uuid, 'completed',
-  now() - interval '8 min', now() - interval '5 min', 20,
+  current_setting('test.report_asof')::timestamptz - interval '8 min',
+  current_setting('test.report_asof')::timestamptz - interval '5 min', 20,
   'Koltuk', 250, 15, 10, 'TRY', 5000, 0, 5000
 );
 
@@ -430,7 +439,9 @@ select set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-11111111
 do $$
 declare r record;
 begin
-  select * into r from public.report_revenue_summary(current_setting('test.b1')::uuid)
+  select * into r from public.report_revenue_summary(
+           current_setting('test.b1')::uuid,
+           current_setting('test.report_asof')::timestamptz)
    where period = 'day';
   if r.completed_count = 2 and r.grand_total_minor = 15500
      and r.service_total_minor = 12500 and r.products_total_minor = 3000 then
@@ -444,7 +455,8 @@ end $$;
 do $$
 declare r record;
 begin
-  select * into r from public.report_top_services(current_setting('test.b1')::uuid, 'day', 5) limit 1;
+  select * into r from public.report_top_services(current_setting('test.b1')::uuid, 'day', 5,
+           current_setting('test.report_asof')::timestamptz) limit 1;
   if r.service_name = 'Koltuk' and r.completed_count = 2 and r.service_revenue_minor = 12500 then
     raise notice 'PASS 26: en cok gelir getiren hizmet dogru (Koltuk x2, 12500)';
   else
@@ -455,7 +467,8 @@ end $$;
 do $$
 declare r record;
 begin
-  select * into r from public.report_top_products(current_setting('test.b1')::uuid, 'day', 5) limit 1;
+  select * into r from public.report_top_products(current_setting('test.b1')::uuid, 'day', 5,
+           current_setting('test.report_asof')::timestamptz) limit 1;
   if r.product_name = 'Kola' and r.sold_quantity = 1 and r.product_revenue_minor = 3000 then
     raise notice 'PASS 27: en cok satilan urun dogru (Kola x1, 3000)';
   else
@@ -466,8 +479,10 @@ end $$;
 do $$
 declare r record; v_cnt int;
 begin
-  select count(*) into v_cnt from public.report_top_customers(current_setting('test.b1')::uuid, 'day', 5);
-  select * into r from public.report_top_customers(current_setting('test.b1')::uuid, 'day', 5) limit 1;
+  select count(*) into v_cnt from public.report_top_customers(current_setting('test.b1')::uuid, 'day', 5,
+           current_setting('test.report_asof')::timestamptz);
+  select * into r from public.report_top_customers(current_setting('test.b1')::uuid, 'day', 5,
+           current_setting('test.report_asof')::timestamptz) limit 1;
   -- Misafir seans haric: yalnizca Ali gorunur, harcama 10500.
   if v_cnt = 1 and r.customer_name = 'Ali' and r.spending_minor = 10500 then
     raise notice 'PASS 28: en cok harcayan musteri dogru (Ali 10500, misafir haric)';

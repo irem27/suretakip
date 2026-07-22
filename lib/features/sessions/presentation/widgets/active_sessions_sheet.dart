@@ -75,7 +75,9 @@ class _ActiveSessionsSheetState extends ConsumerState<ActiveSessionsSheet> {
           children: [
             Text(
               'Aktif İşlemler',
-              style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              style: textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
@@ -87,14 +89,12 @@ class _ActiveSessionsSheetState extends ConsumerState<ActiveSessionsSheet> {
             const SizedBox(height: 16),
             Expanded(
               child: summaries.when(
-                loading: () => const Center(
-                  child: CircularProgressIndicator.adaptive(),
-                ),
+                loading: () =>
+                    const Center(child: CircularProgressIndicator.adaptive()),
                 error: (error, _) => AppErrorState(
                   error: error,
                   fallbackMessage: 'Aktif işlemler yüklenemedi.',
-                  onRetry: () =>
-                      ref.invalidate(activeSessionSummariesProvider),
+                  onRetry: () => ref.invalidate(activeSessionSummariesProvider),
                   padding: const EdgeInsets.all(20),
                   iconSize: 40,
                 ),

@@ -1,12 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
-import 'package:suretakip/core/domain/domain_enums.dart';
+import 'package:suretakip/app/providers/sync_providers.dart';
 import 'package:suretakip/core/utils/monotonic_clock.dart';
 import 'package:suretakip/core/value_objects/money.dart';
+import 'package:suretakip/features/sessions/data/local/local_session_mappers.dart';
+import 'package:suretakip/features/sessions/data/repositories/offline_sessions_repository.dart';
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_item.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_time_entry.dart';
 import 'package:suretakip/features/sessions/domain/services/session_price_calculator.dart';
+import 'package:suretakip/features/services/domain/entities/service.dart';
 import 'package:suretakip/features/products/presentation/controllers/products_controllers.dart';
 import 'package:suretakip/features/history/presentation/controllers/history_controller.dart';
 import 'package:suretakip/features/reports/presentation/controllers/reports_controller.dart';
@@ -95,26 +98,42 @@ class StartSessionController extends AsyncNotifier<void> {
   @override
   Future<void> build() async {}
 
+  /// Seansı offline-first başlatır: yerel yazım + outbox, sonra push denemesi.
+  /// İnternet yoksa seans yerelde kalır ve süre işlemeye devam eder.
   Future<String?> start({
-    required String serviceId,
+    required Service service,
     String? customerId,
     String? notes,
   }) async {
     final business = ref.read(activeBusinessProvider);
     if (business == null) return null;
+    final scope = ref.read(activeBusinessScopeProvider);
+    final member = await ref.read(currentMemberProvider(scope).future);
+    if (member == null) return null;
+    final userId = member.userId;
+
     String? sessionId;
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      sessionId = await ref
-          .read(sessionsRepositoryProvider)
+      final row = await ref
+          .read(offlineSessionsRepositoryProvider)
           .startSession(
-            businessId: business.id,
-            serviceId: serviceId,
-            customerId: customerId,
-            notes: notes,
+            StartSessionInput(
+              businessId: business.id,
+              serviceId: service.id,
+              openedByMemberId: member.id,
+              serviceName: service.name,
+              pricePerMinuteMinor: service.pricePerMinuteMinor,
+              roundingIntervalMinutes: service.roundingIntervalMinutes,
+              minimumChargeMinutes: service.minimumChargeMinutes,
+              currencyCode: service.currencyCode,
+              customerId: customerId,
+              notes: notes,
+            ),
+            actorUserId: userId,
           );
-      final scope = ref.read(activeBusinessScopeProvider);
-      ref.invalidate(sessionsListControllerProvider(scope));
+      sessionId = row.id;
+      // Açık seans akışı Drift stream'i olduğundan liste kendini günceller.
       ref.invalidate(dashboardControllerProvider(scope));
     });
     return state.hasError ? null : sessionId;
@@ -125,18 +144,51 @@ class SessionActionsController extends AsyncNotifier<void> {
   @override
   Future<void> build() async {}
 
-  Future<bool> pause(String sessionId) => _run(
+  Future<bool> pause(String sessionId) => _runSession(
     sessionId,
-    () =>
-        ref.read(sessionsRepositoryProvider).pauseSession(sessionId: sessionId),
+    (repo, businessId, userId) => repo.pauseSession(
+      sessionId: sessionId,
+      businessId: businessId,
+      actorUserId: userId,
+    ),
   );
 
-  Future<bool> resume(String sessionId) => _run(
+  Future<bool> resume(String sessionId) => _runSession(
     sessionId,
-    () => ref
-        .read(sessionsRepositoryProvider)
-        .resumeSession(sessionId: sessionId),
+    (repo, businessId, userId) => repo.resumeSession(
+      sessionId: sessionId,
+      businessId: businessId,
+      actorUserId: userId,
+    ),
   );
+
+  /// Offline seans event'lerini (pause/resume) çalıştırır. Yerel durum Drift
+  /// stream'i olduğundan ekran kendini günceller.
+  Future<bool> _runSession(
+    String sessionId,
+    Future<void> Function(
+      OfflineSessionsRepository repo,
+      String businessId,
+      String userId,
+    )
+    operation,
+  ) async {
+    final business = ref.read(activeBusinessProvider);
+    if (business == null) return false;
+    final scope = ref.read(activeBusinessScopeProvider);
+    final member = await ref.read(currentMemberProvider(scope).future);
+    if (member == null) return false;
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await operation(
+        ref.read(offlineSessionsRepositoryProvider),
+        business.id,
+        member.userId,
+      );
+      ref.invalidate(sessionDetailProvider(sessionId));
+    });
+    return !state.hasError;
+  }
 
   Future<bool> addProduct({
     required String sessionId,
@@ -272,17 +324,13 @@ final sessionDetailProvider = FutureProvider.autoDispose
       );
     });
 
-final openSessionsProvider = Provider<AsyncValue<List<Session>>>((ref) {
-  final scope = ref.watch(activeBusinessScopeProvider);
+/// Açık (aktif/duraklatılmış) seanslar artık Drift stream'inden gelir; böylece
+/// internet olmadan başlatılan seanslar da anında görünür ve süre işler.
+final openSessionsProvider = StreamProvider.autoDispose<List<Session>>((ref) {
+  final businessId = ref.watch(activeBusinessProvider)?.id;
+  if (businessId == null) return Stream.value(const <Session>[]);
   return ref
-      .watch(sessionsListControllerProvider(scope))
-      .whenData(
-        (sessions) => sessions
-            .where(
-              (session) =>
-                  session.status == SessionStatus.active ||
-                  session.status == SessionStatus.paused,
-            )
-            .toList(growable: false),
-      );
+      .watch(sessionsLocalDataSourceProvider)
+      .watchActiveSessions(businessId)
+      .map((rows) => rows.map(mapLocalSessionToDomain).toList(growable: false));
 });

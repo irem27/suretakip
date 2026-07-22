@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:suretakip/app/app.dart';
+import 'package:suretakip/app/providers/sync_providers.dart';
 import 'package:suretakip/core/logging/app_logger_provider.dart';
 import 'package:suretakip/core/services/supabase_initializer.dart';
 
@@ -29,5 +30,6 @@ Future<void> main() async {
   };
 
   await SupabaseInitializer.initialize();
+  container.read(syncTriggerServiceProvider);
   runApp(UncontrolledProviderScope(container: container, child: const App()));
 }

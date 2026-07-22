@@ -1,40 +1,87 @@
+import 'dart:async';
+
+import 'package:drift/drift.dart' show Value;
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/app/providers/sync_providers.dart';
+import 'package:suretakip/core/auth/sync_session_guard.dart';
+import 'package:suretakip/core/database/app_database.dart';
+import 'package:suretakip/core/domain/domain_enums.dart';
+import 'package:suretakip/core/sync/customer_sync_rpc.dart';
+import 'package:suretakip/core/sync/models/sync_enums.dart';
+import 'package:suretakip/core/sync/models/sync_push_result.dart';
+import 'package:suretakip/core/sync/session_sync_rpc.dart';
 import 'package:suretakip/features/businesses/domain/entities/business.dart';
+import 'package:suretakip/features/businesses/domain/entities/business_member.dart';
+import 'package:suretakip/features/customers/data/datasources/customers_remote_data_source.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
 import 'package:suretakip/features/customers/domain/entities/customer_input.dart';
 import 'package:suretakip/features/customers/domain/repositories/customers_repository.dart';
 import 'package:suretakip/features/customers/presentation/controllers/customers_controllers.dart';
 
 void main() {
-  test('liste controller müşterileri yükler', () async {
-    final repository = _FakeCustomersRepository(customers: [_customer()]);
-    final container = _container(repository);
-    addTearDown(container.dispose);
-
-    final state = await container.read(
-      customersListControllerProvider(_scope).future,
+  test('liste controller müşterileri Drift streaminden yükler', () async {
+    final db = AppDatabase.forExecutor(NativeDatabase.memory());
+    addTearDown(db.close);
+    final onlineRepository = _FakeCustomersRepository(
+      customers: [_customer(name: 'Online Müşteri')],
     );
+    final container = _offlineContainer(db, onlineRepository);
+    addTearDown(container.dispose);
+    final provider = customersListControllerProvider(_scope);
+    final updated = Completer<CustomersListState>();
+    final subscription = container.listen(provider, (_, next) {
+      final value = next.valueOrNull;
+      if (value != null && value.customers.isNotEmpty && !updated.isCompleted) {
+        updated.complete(value);
+      }
+    }, fireImmediately: true);
+    addTearDown(subscription.close);
 
-    expect(state.customers, hasLength(1));
-    expect(repository.businessId, 'business-1');
-    expect(repository.includeInactive, isTrue);
+    expect((await container.read(provider.future)).customers, isEmpty);
+    await db
+        .into(db.localCustomers)
+        .insert(
+          LocalCustomersCompanion.insert(
+            id: 'local-customer',
+            businessId: 'business-1',
+            name: 'Yerel Müşteri',
+            syncStatus: SyncStatus.synced.wireName,
+            createdAtLocal: DateTime.utc(2026),
+            updatedAtLocal: DateTime.utc(2026),
+          ),
+        );
+    final state = await updated.future.timeout(const Duration(seconds: 2));
+
+    expect(state.customers.single.id, 'local-customer');
+    expect(state.customers.single.name, 'Yerel Müşteri');
+    expect(onlineRepository.businessId, isNull);
   });
 
   test('arama adı telefon ve e-posta üzerinde client-side çalışır', () async {
-    final repository = _FakeCustomersRepository(
-      customers: [
-        _customer(),
-        _customer(
-          id: 'customer-2',
-          name: 'Banu Korkmaz',
-          phone: '05321234567',
-          email: 'banu@example.com',
-        ),
-      ],
-    );
-    final container = _container(repository);
+    final db = AppDatabase.forExecutor(NativeDatabase.memory());
+    addTearDown(db.close);
+    Future<void> seed(String id, String name, String? phone, String? email) =>
+        db
+            .into(db.localCustomers)
+            .insert(
+              LocalCustomersCompanion.insert(
+                id: id,
+                businessId: 'business-1',
+                name: name,
+                phone: Value(phone),
+                email: Value(email),
+                syncStatus: SyncStatus.synced.wireName,
+                createdAtLocal: DateTime.utc(2026),
+                updatedAtLocal: DateTime.utc(2026),
+              ),
+            );
+    await seed('customer-1', 'Ahmet Erdemir', null, null);
+    await seed('customer-2', 'Banu Korkmaz', '05321234567', 'banu@example.com');
+
+    final container = _offlineContainer(db, _FakeCustomersRepository());
     addTearDown(container.dispose);
     final provider = customersListControllerProvider(_scope);
     final subscription = container.listen(
@@ -51,28 +98,39 @@ void main() {
     expect(state.visibleCustomers.single.id, 'customer-2');
   });
 
-  test('form controller CustomerInput ile müşteri oluşturur', () async {
-    final repository = _FakeCustomersRepository();
-    final container = _container(repository);
-    addTearDown(container.dispose);
-    const input = CustomerInput(
-      businessId: 'business-1',
-      name: 'Can Yılmaz',
-      phone: '5551234567',
-      email: 'can@example.com',
-    );
+  test(
+    'form controller müşteriyi currentMember aktörüyle offline oluşturur',
+    () async {
+      final db = AppDatabase.forExecutor(NativeDatabase.memory());
+      addTearDown(db.close);
+      final onlineRepository = _FakeCustomersRepository();
+      final container = _offlineContainer(db, onlineRepository);
+      addTearDown(container.dispose);
+      const input = CustomerInput(
+        businessId: 'business-1',
+        name: 'Can Yılmaz',
+        phone: '5551234567',
+        email: 'can@example.com',
+      );
 
-    final created = await container
-        .read(customerFormControllerProvider.notifier)
-        .create(input);
+      final created = await container
+          .read(customerFormControllerProvider.notifier)
+          .create(input);
 
-    expect(created?.id, 'customer-1');
-    expect(repository.createdInput, same(input));
-  });
+      expect(created?.name, 'Can Yılmaz');
+      expect(onlineRepository.createdInput, isNull);
+      final localRows = await db.select(db.localCustomers).get();
+      expect(localRows.single.name, 'Can Yılmaz');
+      final outboxRows = await db.select(db.syncOutbox).get();
+      expect(outboxRows.single.originalActorUserId, 'user-1');
+    },
+  );
 
   test('setActive yalnız id ve durumu iletir', () async {
+    final db = AppDatabase.forExecutor(NativeDatabase.memory());
+    addTearDown(db.close);
     final repository = _FakeCustomersRepository(customers: [_customer()]);
-    final container = _container(repository);
+    final container = _offlineContainer(db, repository);
     addTearDown(container.dispose);
 
     final ok = await container
@@ -88,13 +146,24 @@ void main() {
 
 const BusinessScope _scope = (businessId: 'business-1', generation: 0);
 
-ProviderContainer _container(_FakeCustomersRepository repository) =>
-    ProviderContainer(
-      overrides: [
-        customersRepositoryProvider.overrideWithValue(repository),
-        activeBusinessProvider.overrideWithValue(_business()),
-      ],
-    );
+ProviderContainer _offlineContainer(
+  AppDatabase db,
+  _FakeCustomersRepository onlineRepository,
+) => ProviderContainer(
+  overrides: [
+    appDatabaseProvider.overrideWithValue(db),
+    activeBusinessProvider.overrideWithValue(_business()),
+    activeBusinessScopeProvider.overrideWithValue(_scope),
+    currentMemberProvider(_scope).overrideWith((ref) async => _member()),
+    customersRepositoryProvider.overrideWithValue(onlineRepository),
+    customersRemoteDataSourceProvider.overrideWithValue(
+      _NoopCustomersRemoteDataSource(),
+    ),
+    customerSyncApiProvider.overrideWithValue(_NoopCustomerApi()),
+    sessionSyncApiProvider.overrideWithValue(_NoopSessionApi()),
+    syncSessionGuardProvider.overrideWithValue(_AuthRequiredGuard()),
+  ],
+);
 
 Business _business() => Business(
   id: 'business-1',
@@ -103,6 +172,16 @@ Business _business() => Business(
   timezone: 'Europe/Istanbul',
   isActive: true,
   archivedAt: null,
+  createdAt: DateTime.utc(2026),
+  updatedAt: DateTime.utc(2026),
+);
+
+BusinessMember _member() => BusinessMember(
+  id: 'member-1',
+  businessId: 'business-1',
+  userId: 'user-1',
+  role: MemberRole.owner,
+  isActive: true,
   createdAt: DateTime.utc(2026),
   updatedAt: DateTime.utc(2026),
 );
@@ -179,4 +258,61 @@ class _FakeCustomersRepository implements CustomersRepository {
         .firstWhere((customer) => customer.id == customerId)
         .copyWith(isActive: isActive);
   }
+}
+
+class _NoopCustomersRemoteDataSource implements CustomersRemoteDataSource {
+  @override
+  Future<List<Map<String, dynamic>>> getCustomers({
+    required String businessId,
+    required bool includeInactive,
+  }) async => const [];
+
+  @override
+  Future<Map<String, dynamic>> createCustomer(Map<String, Object?> values) =>
+      throw UnimplementedError();
+
+  @override
+  Future<Map<String, dynamic>> getCustomer(String id) =>
+      throw UnimplementedError();
+
+  @override
+  Future<Map<String, dynamic>> updateCustomer(Map<String, Object?> values) =>
+      throw UnimplementedError();
+}
+
+class _AuthRequiredGuard implements SyncSessionGuard {
+  @override
+  Future<SyncResultType?> ensureValidSession() async =>
+      SyncResultType.authRequired;
+}
+
+class _NoopCustomerApi implements CustomerSyncApi {
+  @override
+  Future<SyncPushResult> createCustomer({
+    required String operationId,
+    required String idempotencyKey,
+    required String businessId,
+    required Map<String, Object?> customer,
+    required int payloadVersion,
+  }) async => const SyncPushResult(type: SyncResultType.applied);
+}
+
+class _NoopSessionApi implements SessionSyncApi {
+  @override
+  Future<SyncPushResult> startSession({
+    required String operationId,
+    required String idempotencyKey,
+    required String businessId,
+    required Map<String, Object?> session,
+    required int payloadVersion,
+  }) async => const SyncPushResult(type: SyncResultType.applied);
+
+  @override
+  Future<SyncPushResult> sessionEvent({
+    required String operationId,
+    required String idempotencyKey,
+    required String businessId,
+    required Map<String, Object?> event,
+    required int payloadVersion,
+  }) async => const SyncPushResult(type: SyncResultType.applied);
 }

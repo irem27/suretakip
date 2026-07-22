@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/core/sync/models/sync_enums.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
 import 'package:suretakip/features/customers/presentation/controllers/customers_controllers.dart';
 import 'package:suretakip/features/customers/presentation/pages/customers_list_page.dart';
@@ -96,6 +97,25 @@ void main() {
     expect(formController.isActive, isFalse);
   });
 
+  testWidgets('müşteri sync durum rozetleri kullanıcı metinlerini gösterir', (
+    tester,
+  ) async {
+    const cases = <SyncStatus, String>{
+      SyncStatus.pending: 'Bu cihaza kaydedildi',
+      SyncStatus.synced: 'Senkronize edildi',
+      SyncStatus.conflicted: 'Çakışma',
+      SyncStatus.rejected: 'Aktarılamadı',
+    };
+    for (final entry in cases.entries) {
+      await _pump(
+        tester,
+        customers: [_customer(id: entry.key.name, name: entry.key.name)],
+        syncStatuses: {entry.key.name: entry.key},
+      );
+      expect(find.text(entry.value), findsOneWidget);
+    }
+  });
+
   testWidgets('yükleme hatası metni ve Tekrar Dene aksiyonu görünür', (
     tester,
   ) async {
@@ -121,14 +141,23 @@ Future<void> _pump(
   List<Customer>? customers,
   _CustomersListController? listController,
   _CustomerFormController? formController,
+  Map<String, SyncStatus> syncStatuses = const {},
 }) async {
   final effectiveList = listController ?? _CustomersListController(customers!);
   final effectiveForm = formController ?? _CustomerFormController();
   await tester.pumpWidget(
     ProviderScope(
+      key: UniqueKey(),
       overrides: [
+        activeBusinessScopeProvider.overrideWithValue(const (
+          businessId: 'business-1',
+          generation: 0,
+        )),
         customersListControllerProvider.overrideWith(() => effectiveList),
         customerFormControllerProvider.overrideWith(() => effectiveForm),
+        customerSyncStatusesProvider(
+          'business-1',
+        ).overrideWith((ref) => Stream.value(syncStatuses)),
       ],
       child: const MaterialApp(home: CustomersListPage()),
     ),

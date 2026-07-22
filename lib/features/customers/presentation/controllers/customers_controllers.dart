@@ -1,5 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/app/providers/sync_providers.dart';
+import 'package:suretakip/core/sync/models/sync_enums.dart';
+import 'package:suretakip/features/customers/data/local/local_customer_mappers.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
 import 'package:suretakip/features/customers/domain/entities/customer_input.dart';
 
@@ -29,20 +32,65 @@ final class CustomersListState {
       );
 }
 
+/// Müşteri listesi artık Drift stream'inden gelir (offline-first). İlk oluşumda
+/// [offlineCustomersRepositoryProvider] sunucudan mini bootstrap pull tetikler.
+final customersDriftStreamProvider = StreamProvider.autoDispose
+    .family<List<Customer>, String>(
+      (ref, businessId) => ref
+          .watch(offlineCustomersRepositoryProvider)
+          .watchCustomersDomain(businessId: businessId, includeInactive: true),
+    );
+
+/// Her müşterinin senkronizasyon durumu (id → SyncStatus). Liste rozetleri
+/// "bu cihaza kaydedildi / senkronize edildi / çakışma" ayrımını gösterir.
+final customerSyncStatusesProvider = StreamProvider.autoDispose
+    .family<Map<String, SyncStatus>, String>(
+      (ref, businessId) => ref
+          .watch(offlineCustomersRepositoryProvider)
+          .watchCustomers(businessId: businessId, includeInactive: true)
+          .map(
+            (rows) => {
+              for (final row in rows)
+                row.id: SyncStatus.fromWire(row.syncStatus),
+            },
+          ),
+    );
+
 class CustomersListController
     extends AutoDisposeFamilyAsyncNotifier<CustomersListState, BusinessScope> {
   var _query = '';
-  late BusinessScope _scope;
 
   @override
-  Future<CustomersListState> build(BusinessScope scope) {
-    _scope = scope;
-    return _load();
+  Future<CustomersListState> build(BusinessScope scope) async {
+    final businessId = scope.businessId;
+    if (businessId == null) {
+      return CustomersListState(customers: const [], query: _query);
+    }
+    final streamProvider = customersDriftStreamProvider(businessId);
+    final customers = ref.watch(streamProvider);
+    return switch (customers) {
+      AsyncData(:final value) => CustomersListState(
+        customers: value,
+        query: _query,
+      ),
+      AsyncError(:final error, :final stackTrace) => Error.throwWithStackTrace(
+        error,
+        stackTrace,
+      ),
+      _ => CustomersListState(
+        customers: await ref.watch(streamProvider.future),
+        query: _query,
+      ),
+    };
   }
 
   Future<void> refresh() async {
-    state = const AsyncLoading<CustomersListState>().copyWithPrevious(state);
-    state = await AsyncValue.guard(_load);
+    final businessId = arg.businessId;
+    if (businessId != null) {
+      await ref
+          .read(offlineCustomersRepositoryProvider)
+          .pullFromServer(businessId);
+    }
   }
 
   void setQuery(String query) {
@@ -51,33 +99,26 @@ class CustomersListController
     final current = state.valueOrNull;
     if (current != null) state = AsyncData(current.copyWith(query: query));
   }
-
-  Future<CustomersListState> _load() async {
-    final businessId = _scope.businessId;
-    if (businessId == null) {
-      return CustomersListState(customers: const [], query: _query);
-    }
-    final customers = await ref
-        .watch(customersRepositoryProvider)
-        .getCustomers(businessId: businessId, includeInactive: true);
-    return CustomersListState(customers: customers, query: _query);
-  }
 }
 
 class CustomerFormController extends AsyncNotifier<void> {
   @override
   Future<void> build() async {}
 
+  /// Yeni müşteriyi offline-first oluşturur: yerel yazım + outbox, sonra push.
+  /// İnternet yoksa kayıt cihazda kalır ve listede "bekliyor" olarak görünür.
   Future<Customer?> create(CustomerInput input) async {
+    final scope = ref.read(activeBusinessScopeProvider);
+    final member = await ref.read(currentMemberProvider(scope).future);
+    if (member == null) return null;
+
     Customer? created;
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      created = await ref
-          .read(customersRepositoryProvider)
-          .createCustomer(input);
-      ref.invalidate(
-        customersListControllerProvider(ref.read(activeBusinessScopeProvider)),
-      );
+      final row = await ref
+          .read(offlineCustomersRepositoryProvider)
+          .createCustomer(input, actorUserId: member.userId);
+      created = mapLocalCustomerToDomain(row);
     });
     return state.hasError ? null : created;
   }
@@ -89,10 +130,7 @@ class CustomerFormController extends AsyncNotifier<void> {
       updated = await ref
           .read(customersRepositoryProvider)
           .updateCustomer(customer);
-      ref.invalidate(
-        customersListControllerProvider(ref.read(activeBusinessScopeProvider)),
-      );
-      ref.invalidate(customerDetailProvider(customer.id));
+      await _refreshLocal(customer.businessId, customer.id);
     });
     return state.hasError ? null : updated;
   }
@@ -100,15 +138,20 @@ class CustomerFormController extends AsyncNotifier<void> {
   Future<bool> setActive(String customerId, {required bool isActive}) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      await ref
+      final updated = await ref
           .read(customersRepositoryProvider)
           .setCustomerActive(customerId, isActive: isActive);
-      ref.invalidate(
-        customersListControllerProvider(ref.read(activeBusinessScopeProvider)),
-      );
-      ref.invalidate(customerDetailProvider(customerId));
+      await _refreshLocal(updated.businessId, customerId);
     });
     return !state.hasError;
+  }
+
+  /// Online güncelleme/aktiflik değişiminden sonra Drift kopyasını tazeler.
+  Future<void> _refreshLocal(String businessId, String customerId) async {
+    await ref
+        .read(offlineCustomersRepositoryProvider)
+        .pullFromServer(businessId);
+    ref.invalidate(customerDetailProvider(customerId));
   }
 }
 
@@ -122,8 +165,12 @@ final customerFormControllerProvider =
       CustomerFormController.new,
     );
 
+/// Müşteri detayını Drift'ten okur (offline çalışır); yoksa online'a düşer.
 final customerDetailProvider = FutureProvider.autoDispose
-    .family<Customer, String>(
-      (ref, customerId) =>
-          ref.watch(customersRepositoryProvider).getCustomer(customerId),
-    );
+    .family<Customer, String>((ref, customerId) async {
+      final local = await ref
+          .watch(offlineCustomersRepositoryProvider)
+          .getCustomer(customerId);
+      if (local != null) return local;
+      return ref.watch(customersRepositoryProvider).getCustomer(customerId);
+    });

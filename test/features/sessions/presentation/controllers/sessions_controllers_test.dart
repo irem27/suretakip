@@ -1,9 +1,19 @@
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/app/providers/sync_providers.dart';
+import 'package:suretakip/core/database/app_database.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
+import 'package:suretakip/core/sync/customer_sync_rpc.dart';
+import 'package:suretakip/core/sync/models/sync_enums.dart';
+import 'package:suretakip/core/sync/models/sync_push_result.dart';
+import 'package:suretakip/core/sync/session_sync_rpc.dart';
+import 'package:suretakip/core/auth/sync_session_guard.dart';
 import 'package:suretakip/core/utils/monotonic_clock.dart';
 import 'package:suretakip/features/businesses/domain/entities/business.dart';
+import 'package:suretakip/features/businesses/domain/entities/business_member.dart';
+import 'package:suretakip/features/services/domain/entities/service.dart';
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_item.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_history_filter.dart';
@@ -27,37 +37,48 @@ void main() {
     expect(repository.loadedBusinessId, 'business-1');
   });
 
-  test('başlat controller RPC parametrelerini repositoryye iletir', () async {
-    final repository = _FakeSessionsRepository();
-    final container = _container(repository);
+  test('başlat controller seansı offline yerel olarak oluşturur', () async {
+    final db = AppDatabase.forExecutor(NativeDatabase.memory());
+    addTearDown(db.close);
+    final container = _offlineContainer(db);
     addTearDown(container.dispose);
 
     final id = await container
         .read(startSessionControllerProvider.notifier)
         .start(
-          serviceId: 'service-2',
+          service: _service(),
           customerId: 'customer-1',
           notes: 'Pencere yanı',
         );
 
-    expect(id, 'session-new');
-    expect(repository.startedBusinessId, 'business-1');
-    expect(repository.startedServiceId, 'service-2');
-    expect(repository.startedCustomerId, 'customer-1');
-    expect(repository.startedNotes, 'Pencere yanı');
+    expect(id, isNotNull);
+    final rows = await db.select(db.localSessions).get();
+    expect(rows, hasLength(1));
+    expect(rows.single.serviceId, 'service-2');
+    expect(rows.single.customerId, 'customer-1');
+    expect(rows.single.status, SessionStatus.active.name);
+    expect(rows.single.startedOffline, isTrue);
+    // Outbox'ta start operasyonu birikti.
+    final ops = await db.select(db.syncOutbox).get();
+    expect(ops.single.operationType, SyncOperationType.startSession.wireName);
   });
 
-  test('aksiyon controller duraklatma RPCsini çağırır', () async {
-    final repository = _FakeSessionsRepository();
-    final container = _container(repository);
+  test('aksiyon controller offline duraklatma uygular', () async {
+    final db = AppDatabase.forExecutor(NativeDatabase.memory());
+    addTearDown(db.close);
+    final container = _offlineContainer(db);
     addTearDown(container.dispose);
 
+    final id = await container
+        .read(startSessionControllerProvider.notifier)
+        .start(service: _service());
     final success = await container
         .read(sessionActionsControllerProvider.notifier)
-        .pause('session-1');
+        .pause(id!);
 
     expect(success, isTrue);
-    expect(repository.pausedSessionId, 'session-1');
+    final row = (await db.select(db.localSessions).get()).single;
+    expect(row.status, SessionStatus.paused.name);
   });
 
   test('cihaz duvar saati ileri veya geri alınsa da canlı süre değişmez', () {
@@ -112,7 +133,7 @@ void main() {
   );
 
   test(
-    'pause, resume ve refetch yeni sunucu çapası ile monotonik saat kullanır',
+    'sessionDetail refetch yeni sunucu çapası ile monotonik saat kullanır',
     () async {
       final repository = _FakeSessionsRepository()
         ..serverTimes = [
@@ -140,9 +161,7 @@ void main() {
       firstClock.advance(const Duration(minutes: 20));
       expect(first.effectiveServerNow, DateTime.utc(2026, 7, 17, 12, 20));
 
-      await container
-          .read(sessionActionsControllerProvider.notifier)
-          .pause('session-1');
+      container.invalidate(sessionDetailProvider('session-1'));
       final second = await container.read(
         sessionDetailProvider('session-1').future,
       );
@@ -152,9 +171,7 @@ void main() {
       expect(second.effectiveServerNow, DateTime.utc(2026, 7, 17, 14));
       secondClock.advance(const Duration(minutes: 15));
 
-      await container
-          .read(sessionActionsControllerProvider.notifier)
-          .resume('session-1');
+      container.invalidate(sessionDetailProvider('session-1'));
       final third = await container.read(
         sessionDetailProvider('session-1').future,
       );
@@ -184,6 +201,79 @@ ProviderContainer _container(
       monotonicClockFactoryProvider.overrideWithValue(clockFactory),
   ],
 );
+
+ProviderContainer _offlineContainer(AppDatabase db) => ProviderContainer(
+  overrides: [
+    appDatabaseProvider.overrideWithValue(db),
+    activeBusinessProvider.overrideWithValue(_business()),
+    activeBusinessScopeProvider.overrideWithValue(_scope),
+    currentMemberProvider(_scope).overrideWith((ref) async => _member()),
+    customerSyncApiProvider.overrideWithValue(_NoopCustomerApi()),
+    sessionSyncApiProvider.overrideWithValue(_NoopSessionApi()),
+    syncSessionGuardProvider.overrideWithValue(_NoopGuard()),
+  ],
+);
+
+Service _service() => Service(
+  id: 'service-2',
+  businessId: 'business-1',
+  name: 'Bilardo',
+  pricePerMinuteMinor: 200,
+  roundingIntervalMinutes: 5,
+  minimumChargeMinutes: 10,
+  currencyCode: 'TRY',
+  isActive: true,
+  archivedAt: null,
+  createdAt: DateTime.utc(2026),
+  updatedAt: DateTime.utc(2026),
+);
+
+BusinessMember _member() => BusinessMember(
+  id: 'member-1',
+  businessId: 'business-1',
+  userId: 'user-1',
+  role: MemberRole.owner,
+  isActive: true,
+  createdAt: DateTime.utc(2026),
+  updatedAt: DateTime.utc(2026),
+);
+
+class _NoopGuard implements SyncSessionGuard {
+  @override
+  Future<SyncResultType?> ensureValidSession() async =>
+      SyncResultType.authRequired; // push denemesi kaydı bozmadan durur
+}
+
+class _NoopSessionApi implements SessionSyncApi {
+  @override
+  Future<SyncPushResult> startSession({
+    required String operationId,
+    required String idempotencyKey,
+    required String businessId,
+    required Map<String, Object?> session,
+    required int payloadVersion,
+  }) async => const SyncPushResult(type: SyncResultType.applied);
+
+  @override
+  Future<SyncPushResult> sessionEvent({
+    required String operationId,
+    required String idempotencyKey,
+    required String businessId,
+    required Map<String, Object?> event,
+    required int payloadVersion,
+  }) async => const SyncPushResult(type: SyncResultType.applied);
+}
+
+class _NoopCustomerApi implements CustomerSyncApi {
+  @override
+  Future<SyncPushResult> createCustomer({
+    required String operationId,
+    required String idempotencyKey,
+    required String businessId,
+    required Map<String, Object?> customer,
+    required int payloadVersion,
+  }) async => const SyncPushResult(type: SyncResultType.applied);
+}
 
 Business _business() => Business(
   id: 'business-1',

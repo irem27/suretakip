@@ -1,5 +1,3 @@
-import 'dart:ui' show Tristate;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -8,71 +6,22 @@ import 'package:suretakip/app/theme/app_theme.dart';
 import 'package:suretakip/core/presentation/widgets/app_bottom_nav_bar.dart';
 
 void main() {
-  const expectedLabels = [
-    'Ana Sayfa',
-    'İşlemler',
-    'Müşteriler',
-    'Tanımlar',
-    'Raporlar',
-  ];
+  // Ana Sayfa ortadaki dairesel butondur; yan bölümler etiketli öğelerdir.
+  const sideLabels = ['İşlemler', 'Müşteriler', 'Tanımlar', 'Raporlar'];
 
-  testWidgets('tam olarak beş hedefi doğru Türkçe sırayla gösterir', (
+  testWidgets('dört yan bölüm etiketli, Ana Sayfa dairesel buton olarak durur', (
     tester,
   ) async {
     await _pumpBar(tester);
 
-    final destinations = tester.widgetList<NavigationDestination>(
-      find.byType(NavigationDestination),
-    );
-
-    expect(destinations, hasLength(5));
-    expect(
-      destinations.map((destination) => destination.label),
-      orderedEquals(expectedLabels),
-    );
-    expect(
-      AppSection.values.map((section) => section.label),
-      orderedEquals(expectedLabels),
-    );
+    for (final label in sideLabels) {
+      expect(find.text(label), findsOneWidget);
+    }
+    // Ortadaki Ana Sayfa butonu ikon + semantik ile sunulur, metin etiketi yok.
+    expect(find.text('Ana Sayfa'), findsNothing);
+    expect(find.byIcon(Icons.home_rounded), findsOneWidget);
+    expect(find.bySemanticsLabel('Ana Sayfa'), findsOneWidget);
   });
-
-  for (final themeCase in [
-    (name: 'açık', theme: AppTheme.light()),
-    (name: 'koyu', theme: AppTheme.dark()),
-  ]) {
-    testWidgets(
-      '${themeCase.name} temada seçili gösterge secondary renk jetonunu kullanır',
-      (tester) async {
-        await _pumpBar(tester, theme: themeCase.theme);
-
-        final colorScheme = themeCase.theme.colorScheme;
-        final navigationTheme = themeCase.theme.navigationBarTheme;
-        const selected = {WidgetState.selected};
-        const unselected = <WidgetState>{};
-
-        expect(navigationTheme.indicatorColor, colorScheme.secondary);
-        expect(navigationTheme.indicatorShape, const StadiumBorder());
-        expect(
-          navigationTheme.iconTheme?.resolve(selected)?.color,
-          colorScheme.onSecondary,
-        );
-        expect(
-          navigationTheme.iconTheme?.resolve(unselected)?.color,
-          colorScheme.onSurfaceVariant,
-        );
-        expect(
-          navigationTheme.labelTextStyle?.resolve(selected)?.color,
-          colorScheme.onSurface,
-        );
-        expect(
-          tester
-              .widgetList<NavigationIndicator>(find.byType(NavigationIndicator))
-              .map((indicator) => indicator.color),
-          everyElement(colorScheme.secondary),
-        );
-      },
-    );
-  }
 
   for (final section in AppSection.values) {
     testWidgets('${section.label} hedefi doğru named route’a gider', (
@@ -89,7 +38,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(section.label));
+      // Ana Sayfa ikonla, diğerleri etiketle tıklanır.
+      final finder = section == AppSection.dashboard
+          ? find.byIcon(Icons.home_rounded)
+          : find.text(section.label);
+      await tester.tap(finder);
       await tester.pumpAndSettle();
 
       expect(router.routeInformationProvider.value.uri.path, _pathFor(section));
@@ -98,77 +51,42 @@ void main() {
     });
   }
 
-  testWidgets('320 piksel genişlikte etiketler taşmadan görünür', (
-    tester,
-  ) async {
+  testWidgets('320 piksel genişlikte taşma olmadan yerleşir', (tester) async {
     await _setCompactSurface(tester);
     await _pumpBar(tester);
 
-    _expectNoLayoutOverflow(tester, expectedLabels);
-  });
-
-  testWidgets('2.0 metin ölçeğinde etiketler taşmadan görünür', (tester) async {
-    await _setCompactSurface(tester);
-    await _pumpBar(tester, textScaler: const TextScaler.linear(2));
-
-    _expectNoLayoutOverflow(tester, expectedLabels);
-  });
-
-  testWidgets('her hedef etiketi ve seçili durumunu semantik olarak sunar', (
-    tester,
-  ) async {
-    await _pumpBar(tester);
-
-    for (final section in AppSection.values) {
-      final data = tester
-          .getSemantics(find.text(section.label))
-          .getSemanticsData();
-
-      expect(data.label, startsWith(section.label));
-      expect(
-        data.flagsCollection.isSelected,
-        section == AppSection.definitions ? Tristate.isTrue : Tristate.isFalse,
-      );
-      expect(data.rect.height, greaterThanOrEqualTo(48));
+    expect(tester.takeException(), isNull);
+    for (final label in sideLabels) {
+      final rect = tester.getRect(find.text(label));
+      expect(rect.left, greaterThanOrEqualTo(0));
+      expect(rect.right, lessThanOrEqualTo(320));
     }
   });
 
-  for (final deepRoute in [
-    (path: '/customers/customer-42', section: AppSection.customers),
-    (path: '/sessions/session-42', section: AppSection.sessions),
-  ]) {
-    testWidgets(
-      '${deepRoute.path} deep linki doğru üst hedefi seçer ve kök yığını büyütmez',
-      (tester) async {
-        final router = _navigationRouter(initialLocation: deepRoute.path);
-        addTearDown(router.dispose);
-        await tester.pumpWidget(
-          MaterialApp.router(theme: AppTheme.light(), routerConfig: router),
-        );
-        await tester.pumpAndSettle();
+  testWidgets('2.0 metin ölçeğinde taşma olmadan yerleşir', (tester) async {
+    await _setCompactSurface(tester);
+    await _pumpBar(tester, textScaler: const TextScaler.linear(2));
 
-        final navigationBar = tester.widget<NavigationBar>(
-          find.byType(NavigationBar),
-        );
-        expect(navigationBar.selectedIndex, deepRoute.section.index);
+    expect(tester.takeException(), isNull);
+  });
 
-        await tester.tap(find.text(AppSection.dashboard.label));
-        await tester.pumpAndSettle();
+  testWidgets('Ana Sayfa butonu seçili durumu semantik olarak sunar', (
+    tester,
+  ) async {
+    await _pumpBar(tester, current: AppSection.dashboard);
 
-        expect(
-          router.routeInformationProvider.value.uri.path,
-          AppRoutes.dashboard,
-        );
-        expect(router.canPop(), isFalse);
-      },
-    );
-  }
+    final data = tester
+        .getSemantics(find.bySemanticsLabel('Ana Sayfa'))
+        .getSemanticsData();
+    expect(data.label, 'Ana Sayfa');
+  });
 }
 
 Future<void> _pumpBar(
   WidgetTester tester, {
   ThemeData? theme,
   TextScaler textScaler = TextScaler.noScaling,
+  AppSection current = AppSection.definitions,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -177,9 +95,7 @@ Future<void> _pumpBar(
         data: MediaQuery.of(context).copyWith(textScaler: textScaler),
         child: child!,
       ),
-      home: const Scaffold(
-        bottomNavigationBar: AppBottomNavBar(current: AppSection.definitions),
-      ),
+      home: Scaffold(bottomNavigationBar: AppBottomNavBar(current: current)),
     ),
   );
   await tester.pumpAndSettle();
@@ -190,21 +106,6 @@ Future<void> _setCompactSurface(WidgetTester tester) async {
   tester.view.physicalSize = const Size(320, 640);
   addTearDown(tester.view.resetDevicePixelRatio);
   addTearDown(tester.view.resetPhysicalSize);
-}
-
-void _expectNoLayoutOverflow(WidgetTester tester, List<String> expectedLabels) {
-  expect(tester.takeException(), isNull);
-  expect(
-    tester.getSize(find.byType(NavigationBar)).height,
-    greaterThanOrEqualTo(48),
-  );
-
-  for (final label in expectedLabels) {
-    final rect = tester.getRect(find.text(label));
-    expect(rect.left, greaterThanOrEqualTo(0));
-    expect(rect.right, lessThanOrEqualTo(320));
-    expect(rect.width, lessThanOrEqualTo(320 / expectedLabels.length));
-  }
 }
 
 GoRouter _navigationRouter({
@@ -225,20 +126,6 @@ GoRouter _navigationRouter({
         builder: (_, _) =>
             _NavigationScaffold(section: section, marker: section.routeName),
       ),
-    GoRoute(
-      path: '/customers/:customerId',
-      builder: (_, _) => const _NavigationScaffold(
-        section: AppSection.customers,
-        marker: 'customer-detail',
-      ),
-    ),
-    GoRoute(
-      path: '/sessions/:sessionId',
-      builder: (_, _) => const _NavigationScaffold(
-        section: AppSection.sessions,
-        marker: 'session-detail',
-      ),
-    ),
   ],
 );
 

@@ -1,7 +1,9 @@
 # Veritabanı Tasarımı (v2 — Production Modeli)
 
-> Migration'lar: `supabase/migrations/20260717130000..130200`
-> Test paketi: `supabase/tests/rls_test.sql` (20 senaryo)
+> Online çekirdek migration'ları: `supabase/migrations/20260717130000..` ve
+> ödeme/hardening ekleri. **Offline-first veri katmanı (customer/session sync,
+> change feed, snapshot RPC'leri) için bkz. §8.**
+> Test paketi: `rls_test.sql` (70 senaryo) + offline pgTAP paketleri (§8).
 > Bu doküman `architecture.md`'nin veri katmanı bölümünün yerini alır; oradaki
 > `numeric(12,2)` para modeli ve `owner/manager/employee` rolleri **güncel değildir**.
 
@@ -152,3 +154,43 @@ select transfer_business_ownership(:business_id, :to_member_id);
 **52-70 — ödeme ve tahsilat** *(eklendi: 2026-07-19)*: tamamlanan seansın ödenmemiş başlaması, staff'ın tahsil edip iptal/iade edememesi, owner/admin'in iptal ve iade edebilmesi, aşırı ödeme reddi, bölünmüş ödemenin `paid`'e ulaşması, kısmi ödemenin `partially_paid` dönmesi, idempotency ile tek ödeme, iptal edilen ödemenin net toplamdan çıkması ve **silinmemesi**, iade edilebilir tutarın aşılamaması, denetim olaylarının yazılması, aktif/iptal seansın ödenememesi, çapraz tenant okuma/mutasyon/özet reddi, doğrudan INSERT/UPDATE/DELETE reddi. Bu blok kendi işletmesini (B3) kurar; yukarıdaki testlerin son durumuna bağımlı değildir.
 
 `supabase/tests/payment_concurrency_test.sh` — **gerçek iki bağlantılı eşzamanlılık testi** *(eklendi: 2026-07-19)*. Tek transaction'lık psql paketi iki cihazı simüle edemediği için ayrı bir harness yazıldı: A bağlantısı ödemeyi açık transaction'da tutar, B aynı anda dener ve `FOR UPDATE` kilidinde **bloke olur**; A commit edince B uyanır, kalan bakiyeyi **yeniden okur** ve `payment_exceeds_balance` ile reddedilir. Sonuç: tek ödeme, toplam aşılmaz. Test verisi çalışma sonunda tamamen silinir.
+
+## 8. Offline-first veri katmanı (2026-07-22)
+
+> Migration'lar: `20260722100000_offline_customer_sync.sql`,
+> `20260722110000_offline_session_sync.sql`, `20260722120000_sync_delta.sql`.
+> Testler: `supabase/tests/create_customer_test.sql` (8),
+> `offline_session_test.sql` (8), `sync_delta_test.sql` (8) — gerçek Postgres'te
+> yeşil. Flutter tarafı Drift ile `AppDatabase` schemaVersion 5.
+
+### 8.1 Sunucu tarafı (Supabase)
+
+| Nesne | Amaç |
+|---|---|
+| `customers.server_version / is_deleted / deleted_at` | Optimistic concurrency + tombstone; `server_version` yalnız `BEFORE UPDATE` trigger'ıyla artar |
+| `sync_processed_operations` | Idempotency sonuç tablosu (key→result_json + payload_hash); istemciye kapalı |
+| `security_events` | Append-only anomali/alarm (id conflict, mismatch); istemciye kapalı |
+| `sync_changes` | Monoton `change_seq` change feed; `customers` AFTER trigger'ı besler; istemciye kapalı |
+| `create_customer` RPC | İstemci UUID + idempotent müşteri oluşturma (advisory lock, server hash) |
+| `sync_start_session` / `sync_session_event` RPC | İstemci damgalı offline seans start/pause/resume (idempotent) |
+| `get_changes(business_id, cursor, limit≤1000)` | Delta pull; `CURSOR_TOO_OLD` sinyali |
+| `get_customers_snapshot(business_id, after_id, limit≤1000)` | Keyset bootstrap; `server_cursor` snapshot-öncesi cursor |
+
+Tümü `security definer`, boş `search_path`, şema-nitelikli; iç tablolar tüm
+istemci rollerine `revoke`; RPC'ler yalnız `authenticated`. Tenant kontrolü her
+yolda `is_business_member`. Güvenlik incelemesi: `docs/security-review-offline-rpcs.md`.
+
+### 8.2 İstemci tarafı (Drift/SQLite)
+
+| Tablo | Amaç |
+|---|---|
+| `local_customers` | Müşterinin cihazdaki operasyonel kopyası + `sync_status`/`server_version`/tombstone |
+| `local_sessions` / `local_session_time_entries` | Offline seans + zaman aralıkları (süre damgadan hesaplanır) |
+| `sync_outbox` | Gönderilmeyi bekleyen mutation'lar; `processing_token` fencing + lease |
+| `sync_state` | Cursor/generation/device_id (delta anahtarları `:$businessId` ile scoped) |
+| `sync_conflicts` | Kullanıcı/yönetici müdahalesi gereken çatışmalar |
+| `customer_snapshot_staging` | Bootstrap snapshot staging (generation + kontrollü merge) |
+
+Domain kaydı + outbox kaydı **aynı Drift transaction'ında** commit edilir. Delta/
+bootstrap dirty (bekleyen) kayıtları asla ezmez; non-ok sunucu yanıtında
+merge/tombstone yapılmaz (bkz. `ADR 0003`).

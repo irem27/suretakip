@@ -45,6 +45,32 @@ Tarih, sürüm ve sorumlu kişi yayın kaydına eklenir.
       doğrulandı.
 - [ ] Pilot kabulündeki bulgular kapatıldı veya açık risk olarak onaylandı.
 
+## Offline-first güvenlik kapısı (Faz D)
+
+> Offline mod son kullanıcıya "güvenli" diye açılmadan önce bu bölüm tamamen
+> yeşil olmalıdır (bkz. `offline-first-contract.md`, `ADR 0003`).
+
+- [ ] Yerel Drift/SQLite veritabanı SQLCipher ile şifreli; DB anahtarı kodda
+      sabit değil, secure storage/Keystore/Keychain'de tutuluyor.
+- [ ] SQLCipher anahtarı ile `device_master_key` ayrı; anahtar log/backup/
+      istemci yanıtında görünmüyor.
+- [ ] Android `allowBackup=false` + hassas ekranlarda `FLAG_SECURE`;
+      iOS file protection + arka plan privacy overlay.
+- [ ] Loglarda token, DB anahtarı, PIN veya müşteri PII'si yok.
+- [ ] Anahtar kaybı/kurtarma ve şifreli DB migration senaryosu test edildi.
+
+## Offline-first işlevsel kabul
+
+- [ ] Uçak modunda oluşturulan müşteri/seans, uygulama ve cihaz yeniden
+      başlatılsa da kaybolmuyor; süre zaman damgasından doğru devam ediyor.
+- [ ] İnternet gelince otomatik senkron (push + delta) çalışıyor; aynı işlem
+      tekrar gönderilse de sunucuda tek kayıt oluşuyor.
+- [ ] Snapshot/delta hiçbir non-ok yanıtta yerel önbelleği silmiyor.
+- [ ] Ortak cihazda çapraz kullanıcı/işletme gönderimi olmuyor (account-scoped
+      outbox claim); logout bekleyen kaydı koruyor.
+- [ ] Offline SQL paketi (create_customer + session + delta pgTAP) ve Flutter
+      offline testleri CI'da yeşil.
+
 ## Secret ve erişim güvenliği
 
 - [ ] Supabase anahtarları ve CI/store erişimleri en az ayrıcalıkla sınırlandı.

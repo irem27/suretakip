@@ -6,6 +6,8 @@ import 'package:suretakip/app/router/app_routes.dart';
 import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
 import 'package:suretakip/core/presentation/widgets/app_bottom_nav_bar.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
+import 'package:suretakip/core/presentation/widgets/sync_status_badge.dart';
+import 'package:suretakip/core/sync/models/sync_enums.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
 import 'package:suretakip/features/customers/presentation/controllers/customers_controllers.dart';
 import 'package:suretakip/features/customers/presentation/utils/customer_presentation_utils.dart';
@@ -32,6 +34,11 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
     final scope = ref.watch(activeBusinessScopeProvider);
     final listProvider = customersListControllerProvider(scope);
     final listState = ref.watch(listProvider);
+    final businessId = scope.businessId;
+    final syncStatuses = businessId == null
+        ? const <String, SyncStatus>{}
+        : ref.watch(customerSyncStatusesProvider(businessId)).valueOrNull ??
+              const <String, SyncStatus>{};
     final formState = ref.watch(customerFormControllerProvider);
     ref.listen(customerFormControllerProvider, (_, next) {
       if (!next.hasError) return;
@@ -122,6 +129,7 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
                           final customer = state.visibleCustomers[index];
                           return _CustomerCard(
                             customer: customer,
+                            syncStatus: syncStatuses[customer.id],
                             isUpdating: formState.isLoading,
                             onTap: () => context.pushNamed(
                               AppRouteNames.customerDetail,
@@ -148,12 +156,14 @@ class _CustomersListPageState extends ConsumerState<CustomersListPage> {
 class _CustomerCard extends StatelessWidget {
   const _CustomerCard({
     required this.customer,
+    required this.syncStatus,
     required this.isUpdating,
     required this.onTap,
     required this.onStatusChanged,
   });
 
   final Customer customer;
+  final SyncStatus? syncStatus;
   final bool isUpdating;
   final VoidCallback onTap;
   final ValueChanged<bool> onStatusChanged;
@@ -184,8 +194,12 @@ class _CustomerCard extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
-                        if (customer.phone != null) Text(customer.phone!),
-                        if (customer.email != null) Text(customer.email!),
+                        if (customer.phone case final phone?) Text(phone),
+                        if (customer.email case final email?) Text(email),
+                        if (syncStatus case final status?) ...[
+                          const SizedBox(height: 6),
+                          SyncStatusBadge(status: status),
+                        ],
                       ],
                     ),
                   ),

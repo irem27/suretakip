@@ -133,3 +133,8 @@ jobs:
           fi
           docker exec -i "$container" \
             psql -U postgres -d postgres -q < supabase/tests/rls_test.sql
+          docker exec -i "$container" \
+            psql -U postgres -d postgres -q < supabase/tests/create_customer_test.sql
+          docker exec -i "$container" \
+            psql -U postgres -d postgres -q < supabase/tests/offline_session_test.sql
+          docker exec -i "$container" psql -U postgres -d postgres -q < supabase/tests/sync_delta_test.sql

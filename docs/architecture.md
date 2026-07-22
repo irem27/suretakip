@@ -25,10 +25,11 @@ Proje, **feature-first** ve **clean architecture** prensipleri ile ilerler.
 - Riverpod
 - GoRouter
 - Supabase (Auth + Realtime + PostgreSQL)
+- Drift (offline local database + outbox)
 - Freezed + json_serializable
 - uuid
 - intl
-- flutter_dotenv
+- `--dart-define-from-file` ile build-time ortam yapılandırması
 
 ## 3) Klasör Yapısı
 
@@ -198,6 +199,17 @@ Kural:
   Kayıt fiziksel silinmez: iptal durum değişimi, iade yeni kayıttır.
   Ayrıntı: `docs/contracts/payment-contract.md`, gerekçe: ADR 0002.
 - Bu maddelerin tamamı `supabase/migrations/` altında uygulanmış durumdadır.
+
+## 10.1) Offline-first sınırı (güncellendi: 2026-07-22)
+
+- Offline uygulama sözleşmesinin tek kaynağı
+  [`offline-first-contract.md`](offline-first-contract.md) dosyasıdır.
+- UI mutation'ları local repository'ye gider; domain kaydı ve outbox aynı
+  Drift transaction'inda yazılır.
+- Sync RPC'leri idempotent'tir; auth/ağ hatası pending veriyi silmez.
+- `processing` outbox kayıtları lease aşımında kurtarılır.
+- SQLCipher, secure storage ve yerel PIN tamamlanana kadar offline taşıma
+  altyapısı son kullanıcıya güvenli offline login olarak sunulmaz.
 
 ## 11) Kodlama Standartları
 

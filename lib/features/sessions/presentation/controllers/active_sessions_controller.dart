@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/app/providers/sync_providers.dart';
 import 'package:suretakip/core/utils/monotonic_clock.dart';
+import 'package:suretakip/features/sessions/data/local/local_session_mappers.dart';
 import 'package:suretakip/core/value_objects/money.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
 import 'package:suretakip/features/customers/presentation/controllers/customers_controllers.dart';
@@ -77,10 +79,11 @@ final class ActiveSessionSummary {
   );
 }
 
-/// Açık işlemlerin canlı özetleri.
+/// Açık işlemlerin canlı özetleri — offline-first (Faz C).
 ///
-/// Zaman kayıtları ve ürün kalemleri seans başına değil TOPLU çekilir
-/// (iki sorgu), böylece açık işlem sayısı arttıkça sorgu sayısı artmaz.
+/// Seanslar ve zaman kayıtları Drift'ten okunur; "şimdi" çapası olarak CİHAZ
+/// saati kullanılır (offline'da `server_now()` yoktur). Süre monotonic saat +
+/// kayıtlı damgalardan türetildiği için uygulama kapansa da donmaz.
 final activeSessionSummariesProvider =
     FutureProvider.autoDispose<List<ActiveSessionSummary>>((ref) async {
       final openSessions = ref.watch(openSessionsProvider).valueOrNull;
@@ -88,13 +91,10 @@ final activeSessionSummariesProvider =
         return const <ActiveSessionSummary>[];
       }
 
-      final repository = ref.watch(sessionsRepositoryProvider);
+      final local = ref.watch(sessionsLocalDataSourceProvider);
       final clock = ref.watch(monotonicClockFactoryProvider)();
       ref.onDispose(clock.stop);
 
-      final sessionIds = openSessions
-          .map((session) => session.id)
-          .toList(growable: false);
       final scope = ref.watch(activeBusinessScopeProvider);
       final customers =
           ref
@@ -106,13 +106,16 @@ final activeSessionSummariesProvider =
         for (final customer in customers) customer.id: customer.name,
       };
 
-      final (timeEntriesBySession, itemsBySession) = await (
-        repository.getTimeEntriesForSessions(sessionIds),
-        repository.getItemsForSessions(sessionIds),
-      ).wait;
-      // Çapa, ilişkili veriler geldikten SONRA alınır; böylece ağ gecikmesi
-      // sayaca fazladan süre olarak yansımaz.
-      final serverAnchor = await repository.serverNow();
+      final entriesBySession = <String, List<SessionTimeEntry>>{};
+      for (final session in openSessions) {
+        final rows = await local.timeEntries(session.id);
+        entriesBySession[session.id] = rows
+            .map(mapLocalTimeEntryToDomain)
+            .toList(growable: false);
+      }
+
+      // Çapa, ilişkili veriler geldikten SONRA alınır.
+      final deviceAnchor = DateTime.now().toUtc();
       final clockAnchor = clock.elapsed;
 
       return [
@@ -123,9 +126,9 @@ final activeSessionSummariesProvider =
                 ? null
                 : customerNamesById[session.customerId],
             timeEntries:
-                timeEntriesBySession[session.id] ?? const <SessionTimeEntry>[],
-            items: itemsBySession[session.id] ?? const <SessionItem>[],
-            serverAnchor: serverAnchor,
+                entriesBySession[session.id] ?? const <SessionTimeEntry>[],
+            items: const <SessionItem>[],
+            serverAnchor: deviceAnchor,
             clock: clock,
             clockAnchor: clockAnchor,
           ),

@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:suretakip/core/constants/app_constants.dart';
+import 'package:suretakip/core/security/secure_auth_storage.dart';
 
 class SupabaseInitializer {
   // Derleme zamanı sabitleri: `--dart-define` / `--dart-define-from-file` ile verilir.
@@ -26,6 +27,12 @@ class SupabaseInitializer {
     await Supabase.initialize(
       url: supabaseUrl,
       publishableKey: supabaseAnonKey,
+      // Oturum belirteçleri ve PKCE verifier düz metin SharedPreferences yerine
+      // Keystore/Keychain'de şifreli tutulur (bkz. secure_auth_storage.dart).
+      authOptions: const FlutterAuthClientOptions(
+        localStorage: SecureSupabaseLocalStorage(),
+        pkceAsyncStorage: SecureGotrueAsyncStorage(),
+      ),
     );
   }
 

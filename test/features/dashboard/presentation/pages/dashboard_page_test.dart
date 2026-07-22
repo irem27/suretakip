@@ -11,6 +11,7 @@ import 'package:suretakip/features/dashboard/presentation/pages/dashboard_page.d
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
 import 'package:suretakip/features/sessions/domain/repositories/sessions_repository.dart';
 import 'package:suretakip/features/sessions/presentation/controllers/active_sessions_controller.dart';
+import 'package:suretakip/features/sessions/presentation/controllers/sessions_controllers.dart';
 import 'package:suretakip/features/sessions/presentation/widgets/active_sessions_sheet.dart';
 
 void main() {
@@ -23,6 +24,9 @@ void main() {
           currentUserProvider.overrideWithValue(null),
           userBusinessesProvider.overrideWith((ref) async => [_business()]),
           activeBusinessProvider.overrideWithValue(_business()),
+          openSessionsProvider.overrideWith(
+            (ref) => Stream.value(const <Session>[]),
+          ),
           dashboardRepositoryProvider.overrideWithValue(
             _FakeDashboardRepository(),
           ),
@@ -69,6 +73,9 @@ void main() {
           currentUserProvider.overrideWithValue(null),
           userBusinessesProvider.overrideWith((ref) async => [_business()]),
           activeBusinessProvider.overrideWithValue(_business()),
+          openSessionsProvider.overrideWith(
+            (ref) => Stream.value(const <Session>[]),
+          ),
           dashboardRepositoryProvider.overrideWithValue(
             _FakeDashboardRepository(),
           ),
@@ -101,6 +108,9 @@ void main() {
           currentUserProvider.overrideWithValue(null),
           userBusinessesProvider.overrideWith((ref) async => [_business()]),
           activeBusinessProvider.overrideWithValue(_business()),
+          openSessionsProvider.overrideWith(
+            (ref) => Stream.value(const <Session>[]),
+          ),
           dashboardRepositoryProvider.overrideWithValue(
             _FakeDashboardRepository(activeSessionCount: 0),
           ),
@@ -138,6 +148,9 @@ void main() {
         ),
         dashboardRepositoryProvider.overrideWithValue(dashboardRepository),
         sessionsRepositoryProvider.overrideWithValue(sessionsRepository),
+        openSessionsProvider.overrideWith(
+          (ref) => Stream.value(const <Session>[]),
+        ),
       ],
     );
     addTearDown(container.dispose);

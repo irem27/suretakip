@@ -1,8 +1,8 @@
 # SüreTakip Offline-First Sözleşmesi
 
-> Durum: Sprint 1 + Sprint 2 + Faz C tamam, güvenlik sertleştirmesi (tenant/
-> account izolasyonu) tamam, yerel şifreleme (Faz D) tamam · Açık CRITICAL/HIGH
-> bulgu yok · Son doğrulama: 22 Temmuz 2026  
+> Durum: Sprint 1 + Sprint 2 + Faz C tamam, tenant/outbox aktör izolasyonu
+> sertleştirildi, yerel şifreleme (Faz D) tamam · Açık CRITICAL/HIGH bulgu yok ·
+> Son doğrulama: 23 Temmuz 2026
 > Bu dosya, `SureTakip_Offline_Mimari_v3.md` planını mevcut repo gerçekliğiyle
 > uzlaştıran kanonik uygulama sözleşmesidir. Kod ile bu dosya çelişirse
 > önce sözleşme karara bağlanır, sonra iki taraf birlikte değiştirilir.
@@ -15,9 +15,19 @@
   Drift stream'inden okunur, yeni müşteri local+outbox tek transaction'da
   oluşturulur, idempotent `create_customer` RPC'siyle push edilir, listede
   sync durum rozeti gösterilir; online→Drift mini-bootstrap pull dirty-aware'dir.
-- **Offline seans (Faz C) UI'ya bağlıdır:** start/pause/resume local+outbox
+- **Offline seans (Faz C) UI'ya bağlıdır:** start/pause/resume/add-product/
+  complete/cancel local+outbox
   event'leri, `depends_on` sıralı, restart-safe; süre zaman damgasından
-  hesaplanır (kapanıp açılınca donmaz). Complete/cancel/add-product hâlâ online.
+  hesaplanır (kapanıp açılınca donmaz). Yerel pending seansın detayı ağsız
+  açılır; sunucu snapshot'ı diğer cihazdaki açık/terminal seansları Drift'e
+  uzlaştırır. Complete/cancel yerel durum ile açık zaman aralığını atomik
+  kapatır ve sunucuya sıralı gönderilir. Ürün ekleme fiyat snapshot'ını yerelde
+  gösterir; sunucu `FOR UPDATE` stok kontrolü + inventory ledger ile kanonik
+  sonucu uygular. İdempotent replay ikinci ürün veya stok hareketi üretmez.
+  Zincirde tek bir event'in başarıya ulaşması aggregate'i erken `synced`
+  yapmaz; bekleyen/geçici hatalı event varsa seans `pending`/`retrying` kalır.
+  Offline tamamlamadan sonra kesin toplam gelene kadar ödeme paneli ve otomatik
+  tahsilat açılmaz; kullanıcıya eşitlemenin beklendiği açıkça gösterilir.
 - **Delta pull + bootstrap (Sprint 2) uygulandı ve testlidir:** `sync_changes`
   feed + customers trigger, `get_changes` ve `get_customers_snapshot` RPC'leri
   (keyset), staging/generation tablosu, snapshot-öncesi cursor yakalama,
@@ -27,19 +37,30 @@
   içindir (logout → hiçbir kayıt gönderilmez); snapshot non-ok yanıtı merge/
   tombstone YAPMAZ (veri kaybı önlenir).
 - Bağlantı/yaşam-döngüsü tetikleyicisi (`SyncTriggerService`) açılış/foreground/
-  bağlantı-dönüşünde push+delta çalıştırır (tek-worker garantili). `sync_conflicts`
-  Drift tablosu mevcuttur.
+  bağlantı-dönüşünde ve aktif işletme hazır olduğunda push + müşteri delta +
+  seans snapshot çalıştırır (tek-worker garantili). Bağlantı ölçümü hata verse
+  bile gerçek sync çağrısı denenir; arka plan hataları loglanır.
+  `sync_conflicts` Drift tablosu mevcuttur.
+- Seans snapshot'ı tüm geçmişi indirmez: sunucudan yalnız aktif/duraklatılmış
+  seansları, ayrıca yerelde açık olup sunucu açık listesinde bulunmayan kimlikleri
+  terminal durum kontrolü için toplu ve tenant-scoped sorgular.
 - **Yerel DB şifreleme (Faz D) tamamlandı:** Drift/SQLite SQLCipher ile şifreli;
   DB anahtarı secure storage'da (Keystore/Keychain, `first_unlock_this_device`),
   kodda sabit değil, loglanmıyor. Android `allowBackup=false` + `FLAG_SECURE`,
   iOS file protection eklendi. Plaintext→şifreli dev geçişi dirty olmayan DB'yi
-  güvenle yeniden oluşturur. 5 güvenlik testi + tam süit yeşil.
+  güvenle yeniden oluşturur. `sqlite3` 3.x native-assets hook'u resmi SQLCipher
+  community build'ini paketler; eski `sqlcipher_flutter_libs`/CocoaPods katmanı
+  kaldırılmış, iOS eklentileri Swift Package Manager'a geçirilmiştir. Gerçek
+  native şifreleme, anahtarsız ret ve plaintext veri koruma testleri yeşildir.
 - Yerel PIN, cihaz kaydı, permission snapshot ve review kuyruğu henüz yoktur
   (Faz E/F/G2).
 - Mevcut rol enum'u `owner | admin | staff`'tır. `manager`, `cashier` ve
   `playground_staff` rol değil; ileride permission anahtarları olabilir.
 - Mevcut şemada `branches` yoktur. `branch_id` alanı ürün kararı + migration
   olmadan local veya remote sözleşmeye eklenmez.
+- Ürün hedefi yalnız Android ve iOS'tur. Flutter Web hedefi, `web/` bootstrap'ı
+  ve web veritabanı bağlantı katmanı bilinçli olarak kaldırılmıştır; web build/
+  dağıtım desteklenmez.
 
 ## 2. Değişmez ilkeler
 
@@ -60,14 +81,14 @@
 |---|---|---|
 | A — Online tenant/domain temeli | ✅ Tamamlandı | RLS/RPC ve Flutter testleri yeşil |
 | B — Offline customer push | ✅ Tamamlandı | Liste Drift'ten, idempotent tek kayıt, UI'ya bağlı |
-| C — Offline session event'leri | ✅ Tamamlandı | Start/pause/resume sıralı, restart-safe, UI'ya bağlı |
+| C — Offline session event'leri | ✅ Tamamlandı | Start/pause/resume/add-product/complete/cancel sıralı, restart-safe, UI'ya bağlı |
 | G1 — Delta pull + bootstrap | ✅ Tamamlandı | Keyset snapshot + cursor + full resync, dirty-aware, testli |
 | Güvenlik — Tenant/account izolasyonu | ✅ Tamamlandı | Scoped cursor + actor-scoped claim + snapshot non-ok abort |
-| D — Yerel güvenlik kapısı (şifreleme) | ✅ Tamamlandı | SQLCipher + secure key store + FLAG_SECURE + iOS file protection; testli (262 test) |
+| D — Yerel güvenlik kapısı (şifreleme) | ✅ Tamamlandı | SQLCipher + secure key store + FLAG_SECURE + iOS file protection; tam süit testli |
 | E — Cihaz kimliği | ⏳ Bekliyor | Register/verify/revoke + owner token'ını kaldırma |
 | F — Çoklu personel/yetki + PIN | ⏳ Bekliyor | Aktör membership + permission/emergency snapshot |
 | G2 — Conflict/review kuyruğu | ⏳ Bekliyor | `sync_conflicts` UI + kabul/red akışı |
-| H — Offline finans/stok | ⏳ Bekliyor | Ledger ve concurrency testleri |
+| H — Offline finans/stok | 🟡 Kısmi | Offline ürün+stok olayı tamam; offline tahsilat/iade ve conflict UX bekliyor |
 
 Offline ekranlar son kullanıcıya "güvenli" diye açılmadan önce Faz D (şifreleme)
 tamamlanmalıdır. Delta/bootstrap ve tenant izolasyonu bu doğrulamadan geçmiştir.
@@ -177,6 +198,8 @@ ile "otomatik review'a gönder" aynı anda varsayılmaz:
 - `FLAG_SECURE` manifest ayarı değil, hassas ekran açılırken window/runtime
   flag'idir; iOS için ayrı uygulama yaşam döngüsü koruması gerekir.
 - SQLCipher anahtarı ile `device_master_key` ayrı rastgele anahtarlardır.
+- Web platformu güvenlik ve veri saklama sözleşmesinin dışındadır; desteklenen
+  istemciler Android/iOS'tur.
 - Keychain/Keystore kaybında pending şifreli DB'nin kurtarılamayabileceği
   kullanıcıya açıkça bildirilir; sık sync bu riskin ana azaltımıdır.
 - 72 saat sonrası sınırsız hassas okuma yoktur; PII maskeleme/cache TTL
@@ -190,19 +213,17 @@ offline customer/session + delta SQL ve Flutter testleri CI'da; delta/bootstrap
 
 Kalan sıra:
 
-1. **(Uygulanıyor)** SQLCipher + secure storage adaptörü + FLAG_SECURE + iOS
-   file protection; yerel DB migration kurtarma/backup prosedürü.
-2. Argon2 test vektörü, zayıf PIN ve kilit/reboot testleri (Faz F).
-3. Cihaz kaydı (register/verify/revoke) ve permission snapshot (Faz E/F).
-4. `sync_conflicts` review UI + kabul/red akışı (Faz G2).
-5. Offline-aware router ve tek owner PIN ekranını aç.
-6. Gerçek Android/iOS kill/restart/uçak modu kabulünü tamamla.
+1. Argon2 test vektörü, zayıf PIN ve kilit/reboot testleri (Faz F).
+2. Cihaz kaydı (register/verify/revoke) ve permission snapshot (Faz E/F).
+3. `sync_conflicts` review UI + kabul/red akışı (Faz G2).
+4. Offline-aware router ve tek owner PIN ekranını aç.
+5. Gerçek Android/iOS kill/restart/uçak modu ve backup kabulünü tamamla.
 
 ## 10. Minimum kabul
 
-- `flutter analyze` temiz; tüm Flutter testleri yeşil (mevcut: 258 test).
-- Offline SQL paketi gerçek Postgres'te yeşil (create_customer 8 + session 8 +
-  delta 8 = 24 pgTAP testi).
+- `flutter analyze` temiz; tüm Flutter testleri yeşil.
+- Offline SQL paketi gerçek Postgres'te yeşil (create_customer 8 + session 9 +
+  delta 8 = 25 pgTAP testi).
 - Aynı operasyon tekrarda tek server kaydı üretir.
 - RPC öncesi kapanan uygulamadaki stale `processing` kaydı yeniden gönderilir.
 - Auth/ağ hatası pending kaydı silmez.
@@ -210,7 +231,8 @@ Kalan sıra:
 - **Snapshot/delta hiçbir non-ok yanıtta yerel önbelleği silmez.**
 - **Delta cursor ve outbox claim tenant/account-scoped'tur; ortak cihazda
   çapraz kullanıcı gönderimi olmaz.**
-- Faz D (şifreleme) tamamlanmadan offline mod son kullanıcıya "güvenli" diye
+- Ortak cihazda tam hesap kilidi, cihaz kimliği ve yerel PIN Faz E/F çıkış
+  kapısıdır; bunlar tamamlanmadan çok personelli offline kullanım güvenli diye
   sunulmaz.
 
 ## 11. Delta pull ve bootstrap sözleşmesi (uygulandı)

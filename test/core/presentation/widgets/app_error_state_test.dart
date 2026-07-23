@@ -31,14 +31,8 @@ void main() {
     );
 
     expect(find.byIcon(Icons.wifi_off_rounded), findsOneWidget);
-    expect(
-      find.text(
-        'İnternet bağlantısı yok gibi görünüyor. '
-        'Bağlantınızı kontrol edip tekrar deneyin.',
-      ),
-      findsOneWidget,
-    );
-    expect(find.widgetWithText(OutlinedButton, 'Tekrar Dene'), findsOneWidget);
+    expect(find.text('Çevrimdışı moddasınız.'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Yenile'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

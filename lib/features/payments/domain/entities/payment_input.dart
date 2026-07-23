@@ -5,7 +5,7 @@ import 'package:suretakip/features/payments/domain/entities/payment.dart';
 part 'payment_input.freezed.dart';
 
 @freezed
-class PaymentInput with _$PaymentInput {
+abstract class PaymentInput with _$PaymentInput {
   const factory PaymentInput({
     required String sessionId,
     required PaymentMethod method,

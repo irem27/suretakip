@@ -12,7 +12,7 @@ enum PaymentRecordStatus { completed, voided }
 enum SessionPaymentStatus { unpaid, partiallyPaid, paid }
 
 @freezed
-class Payment with _$Payment {
+abstract class Payment with _$Payment {
   const Payment._();
 
   const factory Payment({

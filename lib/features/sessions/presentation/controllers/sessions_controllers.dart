@@ -1,15 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/providers/sync_providers.dart';
+import 'package:suretakip/core/database/app_database.dart';
+import 'package:suretakip/core/domain/domain_enums.dart';
+import 'package:suretakip/core/sync/models/sync_enums.dart';
 import 'package:suretakip/core/utils/monotonic_clock.dart';
 import 'package:suretakip/core/value_objects/money.dart';
 import 'package:suretakip/features/sessions/data/local/local_session_mappers.dart';
+import 'package:suretakip/features/sessions/data/local/sessions_local_data_source.dart';
 import 'package:suretakip/features/sessions/data/repositories/offline_sessions_repository.dart';
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_item.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_time_entry.dart';
+import 'package:suretakip/features/sessions/domain/repositories/sessions_repository.dart';
 import 'package:suretakip/features/sessions/domain/services/session_price_calculator.dart';
 import 'package:suretakip/features/services/domain/entities/service.dart';
+import 'package:suretakip/features/products/domain/entities/product.dart';
 import 'package:suretakip/features/products/presentation/controllers/products_controllers.dart';
 import 'package:suretakip/features/history/presentation/controllers/history_controller.dart';
 import 'package:suretakip/features/reports/presentation/controllers/reports_controller.dart';
@@ -79,20 +85,40 @@ final class SessionDetailState {
 class SessionsListController
     extends AutoDisposeFamilyAsyncNotifier<List<Session>, BusinessScope> {
   @override
-  Future<List<Session>> build(BusinessScope scope) => _load(scope.businessId);
+  Future<List<Session>> build(BusinessScope scope) async {
+    final businessId = scope.businessId;
+    if (businessId == null) return const [];
+    return ref.watch(localSessionsStreamProvider(businessId).future);
+  }
 
   Future<void> refresh() async {
-    state = const AsyncLoading<List<Session>>().copyWithPrevious(state);
-    state = await AsyncValue.guard(() => _load(arg.businessId));
-  }
-
-  Future<List<Session>> _load(String? businessId) async {
-    if (businessId == null) return const [];
-    return ref
-        .watch(sessionsRepositoryProvider)
-        .getSessions(businessId: businessId);
+    final businessId = arg.businessId;
+    if (businessId == null) return;
+    try {
+      await ref.read(sessionSnapshotSyncServiceProvider).sync(businessId);
+    } catch (error, stack) {
+      // Yerel liste kullanılmaya devam eder; yenileme ağ yüzünden ekranı
+      // hata durumuna düşürmez.
+      ref
+          .read(appLoggerProvider)
+          .warn(
+            error,
+            stackTrace: stack,
+            context: 'SessionsListBackgroundRefresh',
+          );
+    }
   }
 }
+
+final localSessionsStreamProvider = StreamProvider.autoDispose
+    .family<List<Session>, String>((ref, businessId) {
+      return ref
+          .watch(sessionsLocalDataSourceProvider)
+          .watchSessions(businessId)
+          .map(
+            (rows) => rows.map(mapLocalSessionToDomain).toList(growable: false),
+          );
+    });
 
 class StartSessionController extends AsyncNotifier<void> {
   @override
@@ -192,22 +218,22 @@ class SessionActionsController extends AsyncNotifier<void> {
 
   Future<bool> addProduct({
     required String sessionId,
-    required String productId,
+    required Product product,
     required int quantity,
     int discountMinor = 0,
     int taxMinor = 0,
   }) async {
-    final success = await _run(
+    final success = await _runSession(
       sessionId,
-      () => ref
-          .read(sessionsRepositoryProvider)
-          .addProductToSession(
-            sessionId: sessionId,
-            productId: productId,
-            quantity: quantity,
-            discountMinor: discountMinor,
-            taxMinor: taxMinor,
-          ),
+      (repo, businessId, userId) => repo.addProduct(
+        sessionId: sessionId,
+        businessId: businessId,
+        actorUserId: userId,
+        product: product,
+        quantity: quantity,
+        discountMinor: discountMinor,
+        taxMinor: taxMinor,
+      ),
     );
     if (success) {
       ref.invalidate(
@@ -222,15 +248,15 @@ class SessionActionsController extends AsyncNotifier<void> {
     int discountMinor = 0,
     int taxMinor = 0,
   }) async {
-    final success = await _run(
+    final success = await _runTerminal(
       sessionId,
-      () => ref
-          .read(sessionsRepositoryProvider)
-          .completeSession(
-            sessionId: sessionId,
-            discountMinor: discountMinor,
-            taxMinor: taxMinor,
-          ),
+      (repo, businessId, userId) => repo.completeSession(
+        sessionId: sessionId,
+        businessId: businessId,
+        actorUserId: userId,
+        discountMinor: discountMinor,
+        taxMinor: taxMinor,
+      ),
     );
     // Seans tamamlanınca geçmiş ve raporlar değişir.
     if (success) {
@@ -243,11 +269,13 @@ class SessionActionsController extends AsyncNotifier<void> {
   }
 
   Future<bool> cancel(String sessionId) async {
-    final success = await _run(
+    final success = await _runTerminal(
       sessionId,
-      () => ref
-          .read(sessionsRepositoryProvider)
-          .cancelSession(sessionId: sessionId),
+      (repo, businessId, userId) => repo.cancelSession(
+        sessionId: sessionId,
+        businessId: businessId,
+        actorUserId: userId,
+      ),
     );
     // İptalde stok iade edilir; seans geçmişe/raporlara yansır.
     if (success) {
@@ -260,17 +288,29 @@ class SessionActionsController extends AsyncNotifier<void> {
     return success;
   }
 
-  Future<bool> _run(
+  Future<bool> _runTerminal(
     String sessionId,
-    Future<String> Function() operation,
+    Future<void> Function(
+      OfflineSessionsRepository repo,
+      String businessId,
+      String userId,
+    )
+    operation,
   ) async {
+    final business = ref.read(activeBusinessProvider);
+    if (business == null) return false;
+    final scope = ref.read(activeBusinessScopeProvider);
+    final member = await ref.read(currentMemberProvider(scope).future);
+    if (member == null) return false;
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      await operation();
-      ref.invalidate(sessionDetailProvider(sessionId));
-      ref.invalidate(
-        sessionsListControllerProvider(ref.read(activeBusinessScopeProvider)),
+      await operation(
+        ref.read(offlineSessionsRepositoryProvider),
+        business.id,
+        member.userId,
       );
+      ref.invalidate(sessionDetailProvider(sessionId));
+      ref.invalidate(sessionsListControllerProvider(scope));
     });
     return !state.hasError;
   }
@@ -297,32 +337,118 @@ final monotonicClockFactoryProvider = Provider<MonotonicClock Function()>(
 
 final sessionDetailProvider = FutureProvider.autoDispose
     .family<SessionDetailState, String>((ref, sessionId) async {
-      final repository = ref.watch(sessionsRepositoryProvider);
       final clock = ref.watch(monotonicClockFactoryProvider)();
       ref.onDispose(clock.stop);
-      final session = await repository.getSession(sessionId);
-      final customerFuture = session.customerId == null
-          ? Future<String?>.value(null)
-          : ref
-                .watch(customersRepositoryProvider)
-                .getCustomer(session.customerId!)
-                .then<String?>((customer) => customer.name);
-      final (items, entries, customerName) = await (
-        repository.getSessionItems(sessionId),
-        repository.getSessionTimeEntries(sessionId),
-        customerFuture,
-      ).wait;
-      final serverNow = await repository.serverNow();
-      return SessionDetailState(
-        session: session,
-        customerName: customerName,
-        items: items,
-        timeEntries: entries,
-        serverAnchor: serverNow,
-        clock: clock,
-        clockAnchor: clock.elapsed,
-      );
+      final local = ref.watch(sessionsLocalDataSourceProvider);
+      final localSession = await local.findSession(sessionId);
+      final isLocalOpen =
+          localSession?.status == SessionStatus.active.name ||
+          localSession?.status == SessionStatus.paused.name;
+      if (localSession != null &&
+          (isLocalOpen ||
+              localSession.syncStatus != SyncStatus.synced.wireName)) {
+        return _localSessionDetail(
+          ref,
+          localSession,
+          clock: clock,
+          local: local,
+        );
+      }
+
+      final repository = ref.watch(sessionsRepositoryProvider);
+      try {
+        return await _remoteSessionDetail(
+          ref,
+          sessionId,
+          repository: repository,
+          clock: clock,
+          local: local,
+        );
+      } catch (error, stack) {
+        if (localSession == null) rethrow;
+        ref
+            .read(appLoggerProvider)
+            .warn(
+              error,
+              stackTrace: stack,
+              context: 'SessionDetailLocalFallback',
+            );
+        return _localSessionDetail(
+          ref,
+          localSession,
+          clock: clock,
+          local: local,
+        );
+      }
     });
+
+Future<SessionDetailState> _remoteSessionDetail(
+  Ref ref,
+  String sessionId, {
+  required SessionsRepository repository,
+  required MonotonicClock clock,
+  required SessionsLocalDataSource local,
+}) async {
+  final session = await repository.getSession(sessionId);
+  final customerFuture = session.customerId == null
+      ? Future<String?>.value(null)
+      : ref
+            .watch(customersRepositoryProvider)
+            .getCustomer(session.customerId!)
+            .then<String?>((customer) => customer.name);
+  final (items, entries, customerName) = await (
+    repository.getSessionItems(sessionId),
+    repository.getSessionTimeEntries(sessionId),
+    customerFuture,
+  ).wait;
+  try {
+    await local.reconcileServerItems(sessionId: sessionId, items: items);
+  } catch (error, stack) {
+    // Önbellek ikincil kopyadır; yazma sorunu, başarıyla alınmış kanonik
+    // sunucu detayının kullanıcıya gösterilmesini engellememelidir.
+    ref
+        .read(appLoggerProvider)
+        .warn(error, stackTrace: stack, context: 'SessionDetailItemsCache');
+  }
+  final serverNow = await repository.serverNow();
+  return SessionDetailState(
+    session: session,
+    customerName: customerName,
+    items: items,
+    timeEntries: entries,
+    serverAnchor: serverNow,
+    clock: clock,
+    clockAnchor: clock.elapsed,
+  );
+}
+
+Future<SessionDetailState> _localSessionDetail(
+  Ref ref,
+  LocalSessionRow row, {
+  required MonotonicClock clock,
+  required SessionsLocalDataSource local,
+}) async {
+  final customer = row.customerId == null
+      ? null
+      : await ref
+            .read(customersLocalDataSourceProvider)
+            .findCustomer(row.customerId!);
+  final (entries, itemsBySession) = await (
+    local.timeEntries(row.id),
+    local.itemsForSessions([row.id]),
+  ).wait;
+  return SessionDetailState(
+    session: mapLocalSessionToDomain(row),
+    customerName: customer?.name,
+    items: (itemsBySession[row.id] ?? const [])
+        .map(mapLocalSessionItemToDomain)
+        .toList(growable: false),
+    timeEntries: entries.map(mapLocalTimeEntryToDomain).toList(growable: false),
+    serverAnchor: DateTime.now().toUtc(),
+    clock: clock,
+    clockAnchor: clock.elapsed,
+  );
+}
 
 /// Açık (aktif/duraklatılmış) seanslar artık Drift stream'inden gelir; böylece
 /// internet olmadan başlatılan seanslar da anında görünür ve süre işler.

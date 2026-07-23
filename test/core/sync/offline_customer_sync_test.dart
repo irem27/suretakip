@@ -218,14 +218,16 @@ void main() {
     expect(out.status, SyncStatus.retrying.wireName);
     expect(out.attemptCount, 1);
     expect(out.nextAttemptAt, isNotNull);
-    // Kayıt hâlâ pending müşteri olarak korunur (silinmedi).
+    // Aggregate durumu outbox ile tutarlıdır; kayıt silinmeden retrying kalır.
     final customer = (await db.select(db.localCustomers).get()).single;
-    expect(customer.syncStatus, SyncStatus.pending.wireName);
+    expect(customer.syncStatus, SyncStatus.retrying.wireName);
 
     // Backoff sonrası zamanı ilerlet ve tekrar dene.
     tick = tick.add(const Duration(minutes: 5));
     final second = await engine.push();
     expect(second.pushed, 1);
+    final syncedCustomer = (await db.select(db.localCustomers).get()).single;
+    expect(syncedCustomer.syncStatus, SyncStatus.synced.wireName);
   });
 
   test('authRequired push kaydı bozmadan durur', () async {

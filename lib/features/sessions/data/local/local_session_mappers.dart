@@ -1,6 +1,7 @@
 import 'package:suretakip/core/database/app_database.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
+import 'package:suretakip/features/sessions/domain/entities/session_item.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_time_entry.dart';
 
 /// Drift satırını domain [Session]'a çevirir. Offline seansın finansal alanları
@@ -41,3 +42,20 @@ SessionTimeEntry mapLocalTimeEntryToDomain(LocalSessionTimeEntryRow row) =>
       endedAt: row.endedAt,
       createdAt: row.createdAtLocal,
     );
+
+SessionItem mapLocalSessionItemToDomain(LocalSessionItemRow row) => SessionItem(
+  id: row.id,
+  businessId: row.businessId,
+  sessionId: row.sessionId,
+  productId: row.productId,
+  productNameSnapshot: row.productNameSnapshot,
+  skuSnapshot: row.skuSnapshot,
+  unitPriceMinorSnapshot: row.unitPriceMinorSnapshot,
+  currencyCodeSnapshot: row.currencyCodeSnapshot,
+  quantity: row.quantity,
+  discountMinor: row.discountMinor,
+  taxMinor: row.taxMinor,
+  lineTotalMinor: row.lineTotalMinor,
+  createdAt: row.createdAtServer,
+  updatedAt: row.updatedAtServer,
+);

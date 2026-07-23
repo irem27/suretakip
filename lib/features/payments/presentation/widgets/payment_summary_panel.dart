@@ -233,19 +233,38 @@ class _AmountRow extends StatelessWidget {
   final bool emphasized;
 
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Expanded(child: Text(label)),
-      Text(
-        formatSessionMoney(money.minorUnits, money.currencyCode),
-        style: emphasized
-            ? Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)
-            : null,
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // Tüm para değerleri tek dil: tabular figürler + vurgulu "Kalan" navy
+    // (Numbers-Are-Navy + Tabular-Figures kuralı, _PriceRow ile aynı).
+    final valueStyle = emphasized
+        ? theme.textTheme.titleMedium?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.w800,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          )
+        : theme.textTheme.titleMedium?.copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
+          );
+    return MergeSemantics(
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          const SizedBox(width: 12),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                formatSessionMoney(money.minorUnits, money.currencyCode),
+                style: valueStyle,
+              ),
+            ),
+          ),
+        ],
       ),
-    ],
-  );
+    );
+  }
 }
 
 class _PaymentHistoryCard extends StatelessWidget {
@@ -302,6 +321,7 @@ class _PaymentHistoryCard extends StatelessWidget {
                   '${isRefund ? '−' : ''}${formatSessionMoney(payment.amountMinor, payment.currencyCode)}',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
               ],

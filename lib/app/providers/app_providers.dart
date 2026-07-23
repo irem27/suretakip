@@ -1,6 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:suretakip/core/database/app_database.dart';
 import 'package:suretakip/core/logging/app_logger_provider.dart';
+import 'package:suretakip/features/businesses/data/local/businesses_local_data_source.dart';
+import 'package:suretakip/features/businesses/data/repositories/cached_businesses_repository.dart';
+import 'package:suretakip/features/products/data/local/products_local_data_source.dart';
+import 'package:suretakip/features/products/data/repositories/cached_products_repository.dart';
+import 'package:suretakip/features/services/data/local/services_local_data_source.dart';
+import 'package:suretakip/features/services/data/repositories/cached_services_repository.dart';
 import 'package:suretakip/features/auth/data/datasources/auth_remote_data_source.dart';
 import 'package:suretakip/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:suretakip/features/auth/domain/entities/auth_session_state.dart';
@@ -36,6 +43,18 @@ final supabaseClientProvider = Provider<SupabaseClient>((ref) {
   return Supabase.instance.client;
 });
 
+/// Uygulama ömrü boyunca tek Drift veritabanı örneği (tek writer). Offline
+/// önbellek ve sync katmanı bunu paylaşır.
+final appDatabaseProvider = Provider<AppDatabase>((ref) {
+  final db = AppDatabase();
+  ref.onDispose(db.close);
+  return db;
+});
+
+final businessesLocalDataSourceProvider = Provider<BusinessesLocalDataSource>(
+  (ref) => BusinessesLocalDataSource(ref.watch(appDatabaseProvider)),
+);
+
 final authRemoteDataSourceProvider = Provider<AuthRemoteDataSource>((ref) {
   return AuthRemoteDataSource(ref.watch(supabaseClientProvider));
 });
@@ -65,8 +84,14 @@ final businessesRemoteDataSourceProvider = Provider<BusinessesRemoteDataSource>(
 );
 
 final businessesRepositoryProvider = Provider<BusinessesRepository>((ref) {
-  return BusinessesRepositoryImpl(
-    ref.watch(businessesRemoteDataSourceProvider),
+  // Read-through önbellek: internetsiz açılışta son senkronlanan işletme +
+  // rol yerelden okunur; çevrimiçiyken sunucu otoriterdir ve önbellek tazelenir.
+  return CachedBusinessesRepository(
+    remote: BusinessesRepositoryImpl(
+      ref.watch(businessesRemoteDataSourceProvider),
+      logger: ref.watch(appLoggerProvider),
+    ),
+    local: ref.watch(businessesLocalDataSourceProvider),
     logger: ref.watch(appLoggerProvider),
   );
 });
@@ -188,9 +213,17 @@ final servicesRemoteDataSourceProvider = Provider<ServicesRemoteDataSource>(
   (ref) => ServicesRemoteDataSource(ref.watch(supabaseClientProvider)),
 );
 
+final servicesLocalDataSourceProvider = Provider<ServicesLocalDataSource>(
+  (ref) => ServicesLocalDataSource(ref.watch(appDatabaseProvider)),
+);
+
 final servicesRepositoryProvider = Provider<ServicesRepository>((ref) {
-  return ServicesRepositoryImpl(
-    ref.watch(servicesRemoteDataSourceProvider),
+  return CachedServicesRepository(
+    remote: ServicesRepositoryImpl(
+      ref.watch(servicesRemoteDataSourceProvider),
+      logger: ref.watch(appLoggerProvider),
+    ),
+    local: ref.watch(servicesLocalDataSourceProvider),
     logger: ref.watch(appLoggerProvider),
   );
 });
@@ -199,9 +232,17 @@ final productsRemoteDataSourceProvider = Provider<ProductsRemoteDataSource>(
   (ref) => ProductsRemoteDataSource(ref.watch(supabaseClientProvider)),
 );
 
+final productsLocalDataSourceProvider = Provider<ProductsLocalDataSource>(
+  (ref) => ProductsLocalDataSource(ref.watch(appDatabaseProvider)),
+);
+
 final productsRepositoryProvider = Provider<ProductsRepository>((ref) {
-  return ProductsRepositoryImpl(
-    ref.watch(productsRemoteDataSourceProvider),
+  return CachedProductsRepository(
+    remote: ProductsRepositoryImpl(
+      ref.watch(productsRemoteDataSourceProvider),
+      logger: ref.watch(appLoggerProvider),
+    ),
+    local: ref.watch(productsLocalDataSourceProvider),
     logger: ref.watch(appLoggerProvider),
   );
 });

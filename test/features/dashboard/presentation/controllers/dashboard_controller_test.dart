@@ -1,31 +1,57 @@
+import 'dart:async';
+
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/core/database/app_database.dart';
 import 'package:suretakip/core/value_objects/money.dart';
 import 'package:suretakip/features/businesses/domain/entities/business.dart';
 import 'package:suretakip/features/dashboard/domain/entities/dashboard_metrics.dart';
 import 'package:suretakip/features/dashboard/domain/repositories/dashboard_repository.dart';
 import 'package:suretakip/features/dashboard/presentation/controllers/dashboard_controller.dart';
+import 'package:suretakip/features/sessions/data/local/sessions_local_data_source.dart';
 
 void main() {
-  test('controller aktif işletme kimliğiyle metrikleri yükler', () async {
-    final repository = _FakeDashboardRepository();
+  test('controller uzak metriği beklemeden yerel işlemleri özetler', () async {
+    final db = AppDatabase.forExecutor(NativeDatabase.memory());
+    addTearDown(db.close);
+    await SessionsLocalDataSource(db).startSession(
+      StartSessionLocally(
+        sessionId: 'local-session',
+        timeEntryId: 'entry-1',
+        businessId: 'business-1',
+        serviceId: 'service-1',
+        openedByMemberId: 'member-1',
+        serviceName: 'Bilardo',
+        pricePerMinuteMinor: 200,
+        roundingIntervalMinutes: 5,
+        minimumChargeMinutes: 10,
+        currencyCode: 'TRY',
+        startedAt: DateTime.utc(2026, 7, 23),
+        startedOffline: true,
+      ),
+    );
+    final repository = _FakeDashboardRepository()
+      ..completer = Completer<DashboardMetrics>();
     final container = ProviderContainer(
       overrides: [
+        appDatabaseProvider.overrideWithValue(db),
         activeBusinessProvider.overrideWithValue(_business()),
         dashboardRepositoryProvider.overrideWithValue(repository),
       ],
     );
     addTearDown(container.dispose);
 
-    final metrics = await container.read(
-      dashboardControllerProvider(_businessScope).future,
-    );
+    final metrics = await container
+        .read(dashboardControllerProvider(_businessScope).future)
+        .timeout(const Duration(milliseconds: 100));
 
     expect(metrics, isNotNull);
-    expect(repository.businessId, 'business-1');
-    expect(metrics!.activeSessionCount, 2);
-    expect(metrics.todayRevenue, Money(minorUnits: 12500, currencyCode: 'TRY'));
+    expect(metrics!.activeSessionCount, 1);
+    expect(metrics.todayRevenue, Money.zero('TRY'));
+    repository.completer!.complete(_remoteMetrics());
+    await Future<void>.delayed(Duration.zero);
   });
 
   test('aktif işletme yoksa repository çağrılmaz', () async {
@@ -52,17 +78,20 @@ const BusinessScope _emptyScope = (businessId: null, generation: 0);
 
 class _FakeDashboardRepository implements DashboardRepository {
   String? businessId;
+  Completer<DashboardMetrics>? completer;
 
   @override
   Future<DashboardMetrics> getMetrics({required String businessId}) async {
     this.businessId = businessId;
-    return DashboardMetrics(
-      activeSessionCount: 2,
-      todayCompletedCount: 3,
-      todayRevenue: Money(minorUnits: 12500, currencyCode: 'TRY'),
-    );
+    return completer?.future ?? _remoteMetrics();
   }
 }
+
+DashboardMetrics _remoteMetrics() => DashboardMetrics(
+  activeSessionCount: 2,
+  todayCompletedCount: 3,
+  todayRevenue: Money(minorUnits: 12500, currencyCode: 'TRY'),
+);
 
 Business _business() => Business(
   id: 'business-1',

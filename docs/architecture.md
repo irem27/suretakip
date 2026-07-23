@@ -200,12 +200,14 @@ Kural:
   Ayrıntı: `docs/contracts/payment-contract.md`, gerekçe: ADR 0002.
 - Bu maddelerin tamamı `supabase/migrations/` altında uygulanmış durumdadır.
 
-## 10.1) Offline-first sınırı (güncellendi: 2026-07-22)
+## 10.1) Offline-first sınırı (güncellendi: 2026-07-23)
 
 - Offline uygulama sözleşmesinin tek kaynağı
   [`offline-first-contract.md`](offline-first-contract.md) dosyasıdır.
 - UI mutation'ları local repository'ye gider; domain kaydı ve outbox aynı
   Drift transaction'inda yazılır.
+- Seans `start/pause/resume/add_product/complete/cancel` olayları offline
+  kaydedilir; sunucu stok ve finans sonuçlarını idempotent RPC'de doğrular.
 - Sync RPC'leri idempotent'tir; auth/ağ hatası pending veriyi silmez.
 - `processing` outbox kayıtları lease aşımında kurtarılır.
 - SQLCipher, secure storage ve yerel PIN tamamlanana kadar offline taşıma

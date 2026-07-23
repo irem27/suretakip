@@ -103,6 +103,29 @@ jobs:
             --dart-define=SUPABASE_URL=https://ci.example.supabase.co \
             --dart-define=SUPABASE_ANON_KEY=ci-placeholder-anon-key
 
+  ios-build:
+    name: iOS build doğrulama
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS without codesigning
+        run: |
+          flutter build ios --debug --no-codesign \
+            --dart-define=SUPABASE_URL=https://ci.example.supabase.co \
+            --dart-define=SUPABASE_ANON_KEY=ci-placeholder-anon-key
+
   migrations:
     name: Supabase migrations + RLS/RPC test suite
     runs-on: ubuntu-latest
@@ -144,3 +167,4 @@ jobs:
           docker exec -i "$container" \
             psql -U postgres -d postgres -q < supabase/tests/offline_session_test.sql
           docker exec -i "$container" psql -U postgres -d postgres -q < supabase/tests/sync_delta_test.sql
+          bash supabase/tests/payment_concurrency_test.sh

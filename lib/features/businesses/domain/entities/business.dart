@@ -3,7 +3,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'business.freezed.dart';
 
 @freezed
-class Business with _$Business {
+abstract class Business with _$Business {
   const factory Business({
     required String id,
     required String name,

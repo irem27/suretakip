@@ -113,7 +113,10 @@ void main() {
       final security = LocalDatabaseSecurity(
         log: (_) {},
         validateEncryptedDatabase: (_, _) {
-          throw SqliteException(SqlError.SQLITE_NOTADB, 'wrong key');
+          throw SqliteException(
+            extendedResultCode: SqlError.SQLITE_NOTADB,
+            message: 'wrong key',
+          );
         },
         canOpenWithoutKey: (_) => false,
         exportPlaintextDatabase: (_, _, _) => exportCalled = true,

@@ -209,7 +209,7 @@ class _ProductPickerSheetState extends ConsumerState<ProductPickerSheet> {
         .read(sessionActionsControllerProvider.notifier)
         .addProduct(
           sessionId: widget.sessionId,
-          productId: product.id,
+          product: product,
           quantity: _quantity,
         );
     if (!mounted) return;

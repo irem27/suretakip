@@ -73,6 +73,23 @@ class CustomersLocalDataSource {
     required String businessId,
     bool includeInactive = false,
   }) {
+    return _customersQuery(
+      businessId: businessId,
+      includeInactive: includeInactive,
+    ).watch();
+  }
+
+  /// Canlı abonelik gerektirmeyen ekranlar için tek seferlik yerel okuma.
+  Future<List<LocalCustomerRow>> getCustomers({
+    required String businessId,
+    bool includeInactive = false,
+  }) => _customersQuery(
+    businessId: businessId,
+    includeInactive: includeInactive,
+  ).get();
+
+  SimpleSelectStatement<$LocalCustomersTable, LocalCustomerRow>
+  _customersQuery({required String businessId, required bool includeInactive}) {
     final query = _db.select(_db.localCustomers)
       ..where(
         (t) => t.businessId.equals(businessId) & t.isDeleted.equals(false),
@@ -81,7 +98,7 @@ class CustomersLocalDataSource {
     if (!includeInactive) {
       query.where((t) => t.isActive.equals(true));
     }
-    return query.watch();
+    return query;
   }
 
   Future<LocalCustomerRow?> findCustomer(String id) => (_db.select(

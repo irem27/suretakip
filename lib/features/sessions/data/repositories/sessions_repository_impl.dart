@@ -36,6 +36,22 @@ class SessionsRepositoryImpl implements SessionsRepository {
   );
 
   @override
+  Future<List<Session>> getOpenSessions({required String businessId}) =>
+      _guard(() async {
+        final rows = await _dataSource.getOpenSessions(businessId);
+        return rows.map(_sessionFromJson).toList(growable: false);
+      });
+
+  @override
+  Future<List<Session>> getSessionsByIds({
+    required String businessId,
+    required List<String> sessionIds,
+  }) => _guard(() async {
+    final rows = await _dataSource.getSessionsByIds(businessId, sessionIds);
+    return rows.map(_sessionFromJson).toList(growable: false);
+  });
+
+  @override
   Future<List<Session>> getSessionHistory({
     required String businessId,
     required SessionHistoryFilter filter,

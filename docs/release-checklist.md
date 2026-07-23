@@ -18,8 +18,8 @@ Tarih, sürüm ve sorumlu kişi yayın kaydına eklenir.
 
 - [ ] `dart format --set-exit-if-changed .`, `flutter analyze --fatal-infos` ve
       `flutter test --coverage` başarılı.
-- [ ] CI migration reset ve RLS testleri dahil tamamen yeşil; kapsam kapısı
-      düşürülmedi.
+- [ ] CI Android + codesign'sız iOS build, migration reset, RLS ve iki bağlantılı
+      ödeme eşzamanlılık testi dahil tamamen yeşil; kapsam kapısı düşürülmedi.
 - [ ] Sürüm numarası/build numarası ve değişiklik özeti doğrulandı.
 - [ ] Release adayı `.env.staging` ile üretildi; env dosyaları ve secret'lar
       pakete/repoya eklenmedi.
@@ -52,6 +52,9 @@ Tarih, sürüm ve sorumlu kişi yayın kaydına eklenir.
 
 - [ ] Yerel Drift/SQLite veritabanı SQLCipher ile şifreli; DB anahtarı kodda
       sabit değil, secure storage/Keystore/Keychain'de tutuluyor.
+- [ ] `sqlite3` native-assets `source: sqlcipher` kullanıyor; eski
+      `sqlcipher_flutter_libs`/CocoaPods bağlantısı veya düz SQLite fallback'i
+      bulunmuyor.
 - [ ] SQLCipher anahtarı ile `device_master_key` ayrı; anahtar log/backup/
       istemci yanıtında görünmüyor.
 - [ ] Android `allowBackup=false` + hassas ekranlarda `FLAG_SECURE`;
@@ -63,6 +66,8 @@ Tarih, sürüm ve sorumlu kişi yayın kaydına eklenir.
 
 - [ ] Uçak modunda oluşturulan müşteri/seans, uygulama ve cihaz yeniden
       başlatılsa da kaybolmuyor; süre zaman damgasından doğru devam ediyor.
+- [ ] Son başarılı senkronizasyondaki seans ürün kalemleri uçak modunda da
+      aktif işlem detayı ve tutar önizlemesinde görünüyor.
 - [ ] İnternet gelince otomatik senkron (push + delta) çalışıyor; aynı işlem
       tekrar gönderilse de sunucuda tek kayıt oluşuyor.
 - [ ] Snapshot/delta hiçbir non-ok yanıtta yerel önbelleği silmiyor.
@@ -81,6 +86,8 @@ Tarih, sürüm ve sorumlu kişi yayın kaydına eklenir.
 
 ## Paket ve mağaza
 
+- [ ] Ürün hedefi yalnız Android/iOS; Flutter Web build/dağıtımı yapılmıyor ve
+      web bootstrap dosyaları yeniden üretilmiyor.
 - [ ] Release paketi production imzalama anahtarıyla imzalandı ve imza
       doğrulandı.
 - [ ] Uygulama adı, bundle/application ID, ikon, splash ve izin açıklamaları

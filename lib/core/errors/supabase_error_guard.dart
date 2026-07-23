@@ -42,8 +42,7 @@ abstract final class SupabaseErrorGuard {
   static NetworkException? mapNetworkError(Object error) {
     if (!_isNetworkError(error)) return null;
     return NetworkException(
-      'İnternet bağlantısı yok gibi görünüyor. '
-      'Bağlantınızı kontrol edip tekrar deneyin.',
+      NetworkException.offlineMessage,
       cause: SensitiveDataSanitizer.sanitizedCause(),
     );
   }

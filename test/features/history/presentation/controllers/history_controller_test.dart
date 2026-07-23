@@ -1,6 +1,8 @@
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/core/database/app_database.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
 import 'package:suretakip/features/businesses/domain/entities/business.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
@@ -21,10 +23,14 @@ void main() {
   test(
     'geçmiş controller sunucu zamanı ve işletme timezoneuyla filtreler',
     () async {
+      final db = AppDatabase.forExecutor(NativeDatabase.memory());
+      addTearDown(db.close);
+      await db.customSelect('SELECT 1').get();
       final sessions = _FakeSessionsRepository();
       final payments = _FakePaymentsRepository();
       final container = ProviderContainer(
         overrides: [
+          appDatabaseProvider.overrideWithValue(db),
           activeBusinessProvider.overrideWithValue(_business()),
           sessionsRepositoryProvider.overrideWithValue(sessions),
           customersRepositoryProvider.overrideWithValue(
@@ -38,9 +44,10 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final state = await container.read(
-        historyControllerProvider(_scope).future,
-      );
+      final provider = historyControllerProvider(_scope);
+      await container.read(provider.future);
+      await container.read(provider.notifier).refresh();
+      final state = container.read(provider).requireValue;
 
       expect(state.sessions, hasLength(1));
       expect(

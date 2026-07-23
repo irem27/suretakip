@@ -104,8 +104,7 @@ void main() {
               .having(
                 (exception) => exception.message,
                 'message',
-                'İnternet bağlantısı yok gibi görünüyor. '
-                    'Bağlantınızı kontrol edip tekrar deneyin.',
+                'Çevrimdışı moddasınız.',
               )
               .having(
                 (exception) => exception.cause.toString(),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:suretakip/app/router/app_routes.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
 import 'package:suretakip/core/errors/domain_exception.dart';
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
@@ -83,6 +85,56 @@ void main() {
     expect(find.textContaining('₺45,00'), findsOneWidget);
   });
 
+  testWidgets('aktif işlem satırı alt pencereyi kapatıp detaya gider', (
+    tester,
+  ) async {
+    final summary = _summary(
+      clock: FakeMonotonicClock(),
+      startedAt: DateTime.utc(2026, 7, 19, 10),
+      serverAnchor: DateTime.utc(2026, 7, 19, 10, 5),
+    );
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => Scaffold(
+            body: Center(
+              child: FilledButton(
+                onPressed: () => showActiveSessionsSheet(context),
+                child: const Text('Aktif işlemleri aç'),
+              ),
+            ),
+          ),
+        ),
+        GoRoute(
+          name: AppRouteNames.sessionDetail,
+          path: '/sessions/:sessionId',
+          builder: (context, state) =>
+              Text('Detay ${state.pathParameters['sessionId']}'),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          activeSessionSummariesProvider.overrideWith((ref) async => [summary]),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.tap(find.text('Aktif işlemleri aç'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Ayşe Yılmaz'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ActiveSessionsSheet), findsNothing);
+    expect(find.text('Detay session-1'), findsOneWidget);
+  });
+
   testWidgets('açık işlem yoksa boş durum ve başlatma aksiyonu görünür', (
     tester,
   ) async {
@@ -103,7 +155,7 @@ void main() {
         overrides: [
           activeSessionSummariesProvider.overrideWith(
             (ref) async => throw const NetworkException(
-              'İnternet bağlantısı yok gibi görünüyor.',
+              'Ham taşıma mesajı kullanıcıya gösterilmemeli.',
             ),
           ),
         ],
@@ -112,11 +164,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('İnternet bağlantısı yok gibi görünüyor.'),
-      findsOneWidget,
-    );
-    expect(find.widgetWithText(OutlinedButton, 'Tekrar Dene'), findsOneWidget);
+    expect(find.text('Çevrimdışı moddasınız.'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Yenile'), findsOneWidget);
   });
 }
 

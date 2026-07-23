@@ -7,6 +7,7 @@ import 'package:suretakip/features/sessions/data/local/local_session_mappers.dar
 import 'package:suretakip/core/value_objects/money.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
 import 'package:suretakip/features/customers/presentation/controllers/customers_controllers.dart';
+import 'package:suretakip/features/sessions/data/local/sessions_local_data_source.dart';
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_item.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_time_entry.dart';
@@ -113,6 +114,13 @@ final activeSessionSummariesProvider =
             .map(mapLocalTimeEntryToDomain)
             .toList(growable: false);
       }
+      final sessionIds = openSessions.map((session) => session.id).toList()
+        ..sort();
+      final itemsBySession =
+          ref
+              .watch(_activeSessionItemsProvider(sessionIds.join('|')))
+              .valueOrNull ??
+          const <String, List<SessionItem>>{};
 
       // Çapa, ilişkili veriler geldikten SONRA alınır.
       final deviceAnchor = DateTime.now().toUtc();
@@ -127,10 +135,37 @@ final activeSessionSummariesProvider =
                 : customerNamesById[session.customerId],
             timeEntries:
                 entriesBySession[session.id] ?? const <SessionTimeEntry>[],
-            items: const <SessionItem>[],
+            items: itemsBySession[session.id] ?? const <SessionItem>[],
             serverAnchor: deviceAnchor,
             clock: clock,
             clockAnchor: clockAnchor,
           ),
       ];
     });
+
+final _activeSessionItemsProvider = StreamProvider.autoDispose
+    .family<Map<String, List<SessionItem>>, String>((ref, sessionIdsKey) {
+      final sessionIds = sessionIdsKey.isEmpty
+          ? const <String>[]
+          : sessionIdsKey.split('|');
+      return watchSessionItemsForActiveSummaries(
+        local: ref.watch(sessionsLocalDataSourceProvider),
+        sessionIds: sessionIds,
+      );
+    });
+
+/// Ürün kalemlerini Drift önbelleğinden toplu okur; ağ yokken de finansal
+/// önizleme son başarılı sunucu snapshot'ıyla tutarlı kalır.
+Stream<Map<String, List<SessionItem>>> watchSessionItemsForActiveSummaries({
+  required SessionsLocalDataSource local,
+  required List<String> sessionIds,
+}) => local
+    .watchItemsForSessions(sessionIds)
+    .map(
+      (rowsBySession) => {
+        for (final entry in rowsBySession.entries)
+          entry.key: entry.value
+              .map(mapLocalSessionItemToDomain)
+              .toList(growable: false),
+      },
+    );

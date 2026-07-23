@@ -50,6 +50,16 @@ class _FakeSessionsDataSource implements SessionsRemoteDataSource {
   }) async => [_sessionRow];
 
   @override
+  Future<List<Map<String, dynamic>>> getOpenSessions(String businessId) async =>
+      [_sessionRow];
+
+  @override
+  Future<List<Map<String, dynamic>>> getSessionsByIds(
+    String businessId,
+    List<String> sessionIds,
+  ) async => sessionIds.contains(_sessionRow['id']) ? [_sessionRow] : [];
+
+  @override
   Future<Map<String, dynamic>> getSession(String sessionId) async =>
       _sessionRow;
 

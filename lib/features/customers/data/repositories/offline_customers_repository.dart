@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:uuid/uuid.dart';
 import 'package:suretakip/core/database/app_database.dart';
+import 'package:suretakip/core/logging/app_logger.dart';
+import 'package:suretakip/core/logging/noop_app_logger.dart';
 import 'package:suretakip/core/sync/device_identity.dart';
 import 'package:suretakip/core/sync/sync_engine.dart';
 import 'package:suretakip/features/customers/data/datasources/customers_remote_data_source.dart';
@@ -21,12 +23,14 @@ class OfflineCustomersRepository {
     required SyncEngine syncEngine,
     Uuid? uuid,
     DateTime Function()? clock,
+    AppLogger logger = const NoopAppLogger(),
   }) : _local = local,
        _remote = remote,
        _deviceIdentity = deviceIdentity,
        _syncEngine = syncEngine,
        _uuid = uuid ?? const Uuid(),
-       _clock = clock ?? (() => DateTime.now().toUtc());
+       _clock = clock ?? (() => DateTime.now().toUtc()),
+       _logger = logger;
 
   final CustomersLocalDataSource _local;
   final CustomersRemoteDataSource _remote;
@@ -34,6 +38,7 @@ class OfflineCustomersRepository {
   final SyncEngine _syncEngine;
   final Uuid _uuid;
   final DateTime Function() _clock;
+  final AppLogger _logger;
 
   Stream<List<LocalCustomerRow>> watchCustomers({
     required String businessId,
@@ -91,11 +96,16 @@ class OfflineCustomersRepository {
 
     // Fire-and-forget: bağlantı yoksa kayıt pending kalır, sonra denenir. Arka
     // plan sync hatası (ör. offline) çağıranı asla düşürmemelidir.
-    unawaited(_syncEngine.push().catchError(_ignoreBackgroundSyncError));
+    unawaited(_syncEngine.push().catchError(_handleBackgroundSyncError));
     return row;
   }
 
-  static SyncRunSummary _ignoreBackgroundSyncError(Object _, StackTrace _) {
+  SyncRunSummary _handleBackgroundSyncError(Object error, StackTrace stack) {
+    _logger.warn(
+      error,
+      stackTrace: stack,
+      context: 'OfflineCustomerBackgroundSync',
+    );
     return const SyncRunSummary(
       pushed: 0,
       retried: 0,

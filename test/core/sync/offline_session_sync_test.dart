@@ -10,12 +10,16 @@ import 'package:suretakip/core/sync/outbox_repository.dart';
 import 'package:suretakip/core/sync/session_sync_rpc.dart';
 import 'package:suretakip/core/sync/sync_engine.dart';
 import 'package:suretakip/core/auth/sync_session_guard.dart';
+import 'package:suretakip/features/products/domain/entities/product.dart';
 import 'package:suretakip/features/sessions/data/local/sessions_local_data_source.dart';
 import 'package:suretakip/features/sessions/data/repositories/offline_sessions_repository.dart';
 
 class _RecordingSessionApi implements SessionSyncApi {
   final startCalls = <Map<String, Object?>>[];
   final eventCalls = <Map<String, Object?>>[];
+  SyncPushResult eventResult = const SyncPushResult(
+    type: SyncResultType.applied,
+  );
 
   @override
   Future<SyncPushResult> startSession({
@@ -38,7 +42,7 @@ class _RecordingSessionApi implements SessionSyncApi {
     required int payloadVersion,
   }) async {
     eventCalls.add(event);
-    return const SyncPushResult(type: SyncResultType.applied);
+    return eventResult;
   }
 }
 
@@ -170,4 +174,104 @@ void main() {
     final session = (await db.select(db.localSessions).get()).single;
     expect(session.status, SessionStatus.paused.name);
   });
+
+  test('sonraki olay retry beklerken seans synced işaretlenmez', () async {
+    final row = await repo.startSession(input, actorUserId: 'user-1');
+    await repo.completeSession(
+      sessionId: row.id,
+      businessId: 'biz-1',
+      actorUserId: 'user-1',
+    );
+    sessionApi.eventResult = const SyncPushResult(
+      type: SyncResultType.retryableFailure,
+      errorCode: 'TEMPORARY',
+    );
+
+    final summary = await engine.push();
+
+    expect(summary.pushed, 1);
+    expect(summary.retried, 1);
+    final session = (await db.select(db.localSessions).get()).single;
+    expect(session.status, SessionStatus.completed.name);
+    expect(session.syncStatus, SyncStatus.retrying.wireName);
+  });
+
+  test('tamamlama yerel seansı kapatır ve sıralı outbox olayı yazar', () async {
+    final row = await repo.startSession(input, actorUserId: 'user-1');
+
+    await repo.completeSession(
+      sessionId: row.id,
+      businessId: 'biz-1',
+      actorUserId: 'user-1',
+    );
+
+    final local = await (db.select(
+      db.localSessions,
+    )..where((t) => t.id.equals(row.id))).getSingle();
+    expect(local.status, SessionStatus.completed.name);
+
+    final ops = await db.select(db.syncOutbox).get()
+      ..sort((a, b) => a.sequenceNumber.compareTo(b.sequenceNumber));
+    expect(ops.last.operationType, SyncOperationType.completeSession.wireName);
+    expect(ops.last.dependsOnOperationId, ops.first.operationId);
+  });
+
+  test('iptal yerel seansı kapatır ve sıralı outbox olayı yazar', () async {
+    final row = await repo.startSession(input, actorUserId: 'user-1');
+
+    await repo.cancelSession(
+      sessionId: row.id,
+      businessId: 'biz-1',
+      actorUserId: 'user-1',
+    );
+
+    final local = await (db.select(
+      db.localSessions,
+    )..where((t) => t.id.equals(row.id))).getSingle();
+    expect(local.status, SessionStatus.cancelled.name);
+
+    final ops = await db.select(db.syncOutbox).get()
+      ..sort((a, b) => a.sequenceNumber.compareTo(b.sequenceNumber));
+    expect(ops.last.operationType, SyncOperationType.cancelSession.wireName);
+  });
+
+  test('ürün ekleme yerel kalem ve sıralı outbox olayı yazar', () async {
+    final row = await repo.startSession(input, actorUserId: 'user-1');
+
+    await repo.addProduct(
+      sessionId: row.id,
+      businessId: 'biz-1',
+      actorUserId: 'user-1',
+      product: _product(),
+      quantity: 2,
+    );
+
+    final item = (await db.select(db.localSessionItems).get()).single;
+    expect(item.productId, 'product-1');
+    expect(item.quantity, 2);
+    expect(item.lineTotalMinor, 2500);
+
+    final ops = await db.select(db.syncOutbox).get()
+      ..sort((a, b) => a.sequenceNumber.compareTo(b.sequenceNumber));
+    expect(
+      ops.last.operationType,
+      SyncOperationType.addSessionProduct.wireName,
+    );
+    expect(ops.last.dependsOnOperationId, ops.first.operationId);
+  });
 }
+
+Product _product() => Product(
+  id: 'product-1',
+  businessId: 'biz-1',
+  name: 'Maden Suyu',
+  sku: 'MS-01',
+  unitPriceMinor: 1250,
+  currencyCode: 'TRY',
+  trackStock: true,
+  stockQuantity: 10,
+  isActive: true,
+  archivedAt: null,
+  createdAt: DateTime.utc(2026),
+  updatedAt: DateTime.utc(2026),
+);

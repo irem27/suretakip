@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +6,7 @@ import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/providers/sync_providers.dart';
 import 'package:suretakip/core/database/app_database.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
+import 'package:suretakip/core/logging/app_logger.dart';
 import 'package:suretakip/core/sync/customer_sync_rpc.dart';
 import 'package:suretakip/core/sync/models/sync_enums.dart';
 import 'package:suretakip/core/sync/models/sync_push_result.dart';
@@ -13,7 +15,9 @@ import 'package:suretakip/core/auth/sync_session_guard.dart';
 import 'package:suretakip/core/utils/monotonic_clock.dart';
 import 'package:suretakip/features/businesses/domain/entities/business.dart';
 import 'package:suretakip/features/businesses/domain/entities/business_member.dart';
+import 'package:suretakip/features/products/domain/entities/product.dart';
 import 'package:suretakip/features/services/domain/entities/service.dart';
+import 'package:suretakip/features/sessions/data/local/sessions_local_data_source.dart';
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_item.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_history_filter.dart';
@@ -24,18 +28,40 @@ import 'package:suretakip/features/sessions/presentation/controllers/sessions_co
 import '../../../../helpers/fake_monotonic_clock.dart';
 
 void main() {
-  test('liste controller aktif işletmenin seanslarını yükler', () async {
-    final repository = _FakeSessionsRepository();
-    final container = _container(repository);
-    addTearDown(container.dispose);
+  test(
+    'liste controller uzak sunucuyu beklemeden Drift seanslarını açar',
+    () async {
+      final db = AppDatabase.forExecutor(NativeDatabase.memory());
+      addTearDown(db.close);
+      await SessionsLocalDataSource(db).startSession(
+        StartSessionLocally(
+          sessionId: 'local-session',
+          timeEntryId: 'local-entry',
+          businessId: 'business-1',
+          serviceId: 'service-1',
+          openedByMemberId: 'member-1',
+          serviceName: 'Yerel Bilardo',
+          pricePerMinuteMinor: 200,
+          roundingIntervalMinutes: 5,
+          minimumChargeMinutes: 10,
+          currencyCode: 'TRY',
+          startedAt: DateTime.utc(2026, 7, 17),
+          startedOffline: true,
+        ),
+      );
+      final repository = _FakeSessionsRepository();
+      final container = _offlineContainer(db, sessionsRepository: repository);
+      addTearDown(container.dispose);
 
-    final sessions = await container.read(
-      sessionsListControllerProvider(_scope).future,
-    );
+      final sessions = await container.read(
+        sessionsListControllerProvider(_scope).future,
+      );
 
-    expect(sessions, hasLength(1));
-    expect(repository.loadedBusinessId, 'business-1');
-  });
+      expect(sessions, hasLength(1));
+      expect(sessions.single.id, 'local-session');
+      expect(repository.loadedBusinessId, isNull);
+    },
+  );
 
   test('başlat controller seansı offline yerel olarak oluşturur', () async {
     final db = AppDatabase.forExecutor(NativeDatabase.memory());
@@ -79,6 +105,139 @@ void main() {
     expect(success, isTrue);
     final row = (await db.select(db.localSessions).get()).single;
     expect(row.status, SessionStatus.paused.name);
+  });
+
+  test('offline başlatılan seansın detayı yerel veriden açılır', () async {
+    final db = AppDatabase.forExecutor(NativeDatabase.memory());
+    addTearDown(db.close);
+    final container = _offlineContainer(db);
+    addTearDown(container.dispose);
+
+    final id = await container
+        .read(startSessionControllerProvider.notifier)
+        .start(service: _service(), notes: 'Yerel not');
+    await container
+        .read(sessionsLocalDataSourceProvider)
+        .reconcileServerItems(sessionId: id!, items: [_sessionItem(id)]);
+    final detail = await container.read(sessionDetailProvider(id).future);
+
+    expect(detail.session.id, id);
+    expect(detail.session.notes, 'Yerel not');
+    expect(detail.timeEntries, hasLength(1));
+    expect(detail.items.single.lineTotalMinor, 600);
+    expect(detail.session.status, SessionStatus.active);
+  });
+
+  test(
+    'synced aktif işlem detayı sunucuyu beklemeden yerelden açılır',
+    () async {
+      final db = AppDatabase.forExecutor(NativeDatabase.memory());
+      addTearDown(db.close);
+      await SessionsLocalDataSource(db).startSession(
+        StartSessionLocally(
+          sessionId: 'session-1',
+          timeEntryId: 'local-entry',
+          businessId: 'business-1',
+          serviceId: 'service-1',
+          openedByMemberId: 'member-1',
+          serviceName: 'Yerel Bilardo',
+          pricePerMinuteMinor: 200,
+          roundingIntervalMinutes: 5,
+          minimumChargeMinutes: 10,
+          currencyCode: 'TRY',
+          startedAt: DateTime.utc(2026, 7, 17),
+          startedOffline: false,
+        ),
+      );
+      await (db.update(db.localSessions)
+            ..where((row) => row.id.equals('session-1')))
+          .write(const LocalSessionsCompanion(syncStatus: Value('synced')));
+      final repository = _FakeSessionsRepository();
+      final container = _offlineContainer(db, sessionsRepository: repository);
+      addTearDown(container.dispose);
+
+      final detail = await container.read(
+        sessionDetailProvider('session-1').future,
+      );
+
+      expect(detail.session.serviceNameSnapshot, 'Yerel Bilardo');
+      expect(repository.getSessionCallCount, 0);
+    },
+  );
+
+  test('ürün ekleme internetsiz yerel kalem ve outbox oluşturur', () async {
+    final db = AppDatabase.forExecutor(NativeDatabase.memory());
+    addTearDown(db.close);
+    final container = _offlineContainer(db);
+    addTearDown(container.dispose);
+    final sessionId = await container
+        .read(startSessionControllerProvider.notifier)
+        .start(service: _service());
+
+    final success = await container
+        .read(sessionActionsControllerProvider.notifier)
+        .addProduct(sessionId: sessionId!, product: _product(), quantity: 2);
+
+    expect(success, isTrue);
+    expect((await db.select(db.localSessionItems).get()), hasLength(1));
+    final ops = await db.select(db.syncOutbox).get()
+      ..sort((a, b) => a.sequenceNumber.compareTo(b.sequenceNumber));
+    expect(
+      ops.last.operationType,
+      SyncOperationType.addSessionProduct.wireName,
+    );
+  });
+
+  test(
+    'uzak detay yerel ürün cache yazımı bozulsa da kullanıcıya açılır',
+    () async {
+      final db = AppDatabase.forExecutor(NativeDatabase.memory());
+      addTearDown(db.close);
+      final logger = _RecordingLogger();
+      final container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          sessionsLocalDataSourceProvider.overrideWithValue(
+            _FailingItemsCache(db),
+          ),
+          sessionsRepositoryProvider.overrideWithValue(
+            _FakeSessionsRepository()
+              ..sessionItems = [_sessionItem('session-1')],
+          ),
+          activeBusinessProvider.overrideWithValue(_business()),
+          appLoggerProvider.overrideWithValue(logger),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final detail = await container.read(
+        sessionDetailProvider('session-1').future,
+      );
+
+      expect(detail.items, hasLength(1));
+      expect(logger.warningContexts, ['SessionDetailItemsCache']);
+    },
+  );
+
+  test('uzak tamamlama yerel açık seansı da kapatır', () async {
+    final db = AppDatabase.forExecutor(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repository = _FakeSessionsRepository();
+    final container = _offlineContainer(db, sessionsRepository: repository);
+    addTearDown(container.dispose);
+
+    final id = await container
+        .read(startSessionControllerProvider.notifier)
+        .start(service: _service());
+    final success = await container
+        .read(sessionActionsControllerProvider.notifier)
+        .complete(sessionId: id!);
+
+    expect(success, isTrue);
+    expect(
+      (await db.select(db.localSessions).get()).single.status,
+      SessionStatus.completed.name,
+    );
   });
 
   test('cihaz duvar saati ileri veya geri alınsa da canlı süre değişmez', () {
@@ -195,6 +354,11 @@ ProviderContainer _container(
   MonotonicClock Function()? clockFactory,
 }) => ProviderContainer(
   overrides: [
+    appDatabaseProvider.overrideWith((ref) {
+      final db = AppDatabase.forExecutor(NativeDatabase.memory());
+      ref.onDispose(db.close);
+      return db;
+    }),
     sessionsRepositoryProvider.overrideWithValue(repository),
     activeBusinessProvider.overrideWithValue(_business()),
     if (clockFactory != null)
@@ -202,9 +366,14 @@ ProviderContainer _container(
   ],
 );
 
-ProviderContainer _offlineContainer(AppDatabase db) => ProviderContainer(
+ProviderContainer _offlineContainer(
+  AppDatabase db, {
+  SessionsRepository? sessionsRepository,
+}) => ProviderContainer(
   overrides: [
     appDatabaseProvider.overrideWithValue(db),
+    if (sessionsRepository != null)
+      sessionsRepositoryProvider.overrideWithValue(sessionsRepository),
     activeBusinessProvider.overrideWithValue(_business()),
     activeBusinessScopeProvider.overrideWithValue(_scope),
     currentMemberProvider(_scope).overrideWith((ref) async => _member()),
@@ -228,6 +397,21 @@ Service _service() => Service(
   updatedAt: DateTime.utc(2026),
 );
 
+Product _product() => Product(
+  id: 'product-1',
+  businessId: 'business-1',
+  name: 'Maden Suyu',
+  sku: 'MS-01',
+  unitPriceMinor: 300,
+  currencyCode: 'TRY',
+  trackStock: true,
+  stockQuantity: 10,
+  isActive: true,
+  archivedAt: null,
+  createdAt: DateTime.utc(2026),
+  updatedAt: DateTime.utc(2026),
+);
+
 BusinessMember _member() => BusinessMember(
   id: 'member-1',
   businessId: 'business-1',
@@ -242,6 +426,33 @@ class _NoopGuard implements SyncSessionGuard {
   @override
   Future<SyncResultType?> ensureValidSession() async =>
       SyncResultType.authRequired; // push denemesi kaydı bozmadan durur
+}
+
+final class _FailingItemsCache extends SessionsLocalDataSource {
+  const _FailingItemsCache(super.db);
+
+  @override
+  Future<void> reconcileServerItems({
+    required String sessionId,
+    required List<SessionItem> items,
+  }) async {
+    throw StateError('cache write failed');
+  }
+}
+
+final class _RecordingLogger implements AppLogger {
+  final warningContexts = <String?>[];
+
+  @override
+  void error(Object error, {StackTrace? stackTrace, String? context}) {}
+
+  @override
+  void info(Object message, {String? context}) {}
+
+  @override
+  void warn(Object warning, {StackTrace? stackTrace, String? context}) {
+    warningContexts.add(context);
+  }
 }
 
 class _NoopSessionApi implements SessionSyncApi {
@@ -312,6 +523,23 @@ Session _session() => Session(
   updatedAt: DateTime.utc(2026, 7, 17),
 );
 
+SessionItem _sessionItem(String sessionId) => SessionItem(
+  id: 'item-1',
+  businessId: 'business-1',
+  sessionId: sessionId,
+  productId: 'product-1',
+  productNameSnapshot: 'Su',
+  skuSnapshot: null,
+  unitPriceMinorSnapshot: 300,
+  currencyCodeSnapshot: 'TRY',
+  quantity: 2,
+  discountMinor: 0,
+  taxMinor: 0,
+  lineTotalMinor: 600,
+  createdAt: DateTime.utc(2026),
+  updatedAt: DateTime.utc(2026),
+);
+
 SessionDetailState _detailState({
   required FakeMonotonicClock clock,
   SessionStatus status = SessionStatus.active,
@@ -345,6 +573,8 @@ class _FakeSessionsRepository implements SessionsRepository {
   String? pausedSessionId;
   List<DateTime> serverTimes = [DateTime.utc(2026, 7, 17, 12)];
   int serverNowCallCount = 0;
+  List<SessionItem> sessionItems = const [];
+  int getSessionCallCount = 0;
 
   @override
   Future<List<Session>> getSessions({
@@ -354,6 +584,17 @@ class _FakeSessionsRepository implements SessionsRepository {
     loadedBusinessId = businessId;
     return [_session()];
   }
+
+  @override
+  Future<List<Session>> getOpenSessions({required String businessId}) async => [
+    _session(),
+  ];
+
+  @override
+  Future<List<Session>> getSessionsByIds({
+    required String businessId,
+    required List<String> sessionIds,
+  }) async => sessionIds.contains('session-1') ? [_session()] : const [];
 
   @override
   Future<String> startSession({
@@ -398,7 +639,10 @@ class _FakeSessionsRepository implements SessionsRepository {
   Future<String> cancelSession({required String sessionId}) async => sessionId;
 
   @override
-  Future<Session> getSession(String sessionId) async => _session();
+  Future<Session> getSession(String sessionId) async {
+    getSessionCallCount++;
+    return _session();
+  }
 
   @override
   Future<List<Session>> getSessionHistory({
@@ -407,7 +651,8 @@ class _FakeSessionsRepository implements SessionsRepository {
   }) async => const [];
 
   @override
-  Future<List<SessionItem>> getSessionItems(String sessionId) async => const [];
+  Future<List<SessionItem>> getSessionItems(String sessionId) async =>
+      sessionItems;
 
   @override
   Future<List<SessionTimeEntry>> getSessionTimeEntries(

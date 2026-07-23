@@ -178,6 +178,9 @@ class SyncEngine {
         );
       case SyncOperationType.pauseSession:
       case SyncOperationType.resumeSession:
+      case SyncOperationType.addSessionProduct:
+      case SyncOperationType.completeSession:
+      case SyncOperationType.cancelSession:
         return _sessionRpc.sessionEvent(
           operationId: row.operationId,
           idempotencyKey: row.idempotencyKey,
@@ -205,6 +208,15 @@ class SyncEngine {
       case SyncResultType.authRequired:
         final reset = await _outbox.resetToPending(row);
         return reset ? _Outcome.authRequired : _Outcome.superseded;
+      case SyncResultType.retryableFailure:
+        final attemptCount = row.attemptCount + 1;
+        final marked = await _outbox.markRetrying(
+          row,
+          attemptCount: attemptCount,
+          nextAttemptAt: _clock().add(_retryPolicy.nextDelay(attemptCount)),
+          errorCode: result.errorCode ?? 'RETRYABLE',
+        );
+        return marked ? _Outcome.retried : _Outcome.superseded;
       case SyncResultType.conflict:
         final marked = await _outbox.markTerminal(
           row,

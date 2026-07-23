@@ -58,3 +58,6 @@ app.*.map.json
 
 # Local agent tooling runs
 .projectforge/
+
+# Derlenmiş APK çıktıları git'e girmez
+*.apk

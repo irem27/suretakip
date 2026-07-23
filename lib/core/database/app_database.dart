@@ -1,7 +1,12 @@
 import 'package:drift/drift.dart';
 
 import 'package:suretakip/core/database/tables/customer_snapshot_staging_table.dart';
+import 'package:suretakip/core/database/tables/local_business_members_table.dart';
+import 'package:suretakip/core/database/tables/local_businesses_table.dart';
 import 'package:suretakip/core/database/tables/local_customers_table.dart';
+import 'package:suretakip/core/database/tables/local_products_table.dart';
+import 'package:suretakip/core/database/tables/local_services_table.dart';
+import 'package:suretakip/core/database/tables/local_session_items_table.dart';
 import 'package:suretakip/core/database/tables/local_session_time_entries_table.dart';
 import 'package:suretakip/core/database/tables/local_sessions_table.dart';
 import 'package:suretakip/core/database/tables/sync_conflicts_table.dart';
@@ -19,6 +24,11 @@ part 'app_database.g.dart';
     LocalCustomers,
     LocalSessions,
     LocalSessionTimeEntries,
+    LocalSessionItems,
+    LocalBusinesses,
+    LocalBusinessMembers,
+    LocalServices,
+    LocalProducts,
     SyncOutbox,
     SyncState,
     SyncConflicts,
@@ -32,7 +42,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forExecutor(super.executor);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -54,6 +64,20 @@ class AppDatabase extends _$AppDatabase {
       // v5: bootstrap snapshot staging (Bölüm 15.1.1).
       if (from < 5) {
         await m.createTable(customerSnapshotStaging);
+      }
+      // v6: sunucu-otoriteli seans ürün kalemlerinin offline önbelleği.
+      if (from < 6) {
+        await m.createTable(localSessionItems);
+      }
+      // v7: internetsiz açılış için işletme + üyelik read-through önbelleği.
+      if (from < 7) {
+        await m.createTable(localBusinesses);
+        await m.createTable(localBusinessMembers);
+      }
+      // v8: hizmet + ürün read-through önbelleği (seans döngüsü offline).
+      if (from < 8) {
+        await m.createTable(localServices);
+        await m.createTable(localProducts);
       }
     },
   );

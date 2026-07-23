@@ -224,9 +224,10 @@ class OutboxRepository {
                 ),
               );
       if (updated != 1) return false;
+      final aggregateStatus = await _aggregateStatus(row);
       await _writeAggregateStatus(
         row,
-        status: SyncStatus.synced,
+        status: aggregateStatus,
         serverVersion: result.serverVersion,
         createdAtServer: result.createdAtServer,
         updatedAtServer: result.updatedAtServer,
@@ -273,22 +274,26 @@ class OutboxRepository {
   /// Worker auth nedeniyle durduğunda `processing`'i tekrar `pending` yapar;
   /// deneme sayısına dokunmaz (Bölüm 10, adım 3/12).
   Future<bool> resetToPending(SyncOutboxRow row) async {
-    final token = row.processingToken;
-    if (token == null) return false;
-    final updated =
-        await (_db.update(_db.syncOutbox)..where(
-              (t) =>
-                  t.id.equals(row.id) &
-                  t.status.equals(SyncStatus.processing.wireName) &
-                  t.processingToken.equals(token),
-            ))
-            .write(
-              SyncOutboxCompanion(
-                status: Value(SyncStatus.pending.wireName),
-                processingToken: const Value(null),
-              ),
-            );
-    return updated == 1;
+    return _db.transaction(() async {
+      final token = row.processingToken;
+      if (token == null) return false;
+      final updated =
+          await (_db.update(_db.syncOutbox)..where(
+                (t) =>
+                    t.id.equals(row.id) &
+                    t.status.equals(SyncStatus.processing.wireName) &
+                    t.processingToken.equals(token),
+              ))
+              .write(
+                SyncOutboxCompanion(
+                  status: Value(SyncStatus.pending.wireName),
+                  processingToken: const Value(null),
+                ),
+              );
+      if (updated != 1) return false;
+      await _writeAggregateStatus(row, status: await _aggregateStatus(row));
+      return true;
+    });
   }
 
   Future<bool> markRetrying(
@@ -298,26 +303,30 @@ class OutboxRepository {
     String? errorCode,
     String? errorMessage,
   }) async {
-    final token = row.processingToken;
-    if (token == null) return false;
-    final updated =
-        await (_db.update(_db.syncOutbox)..where(
-              (t) =>
-                  t.id.equals(row.id) &
-                  t.status.equals(SyncStatus.processing.wireName) &
-                  t.processingToken.equals(token),
-            ))
-            .write(
-              SyncOutboxCompanion(
-                status: Value(SyncStatus.retrying.wireName),
-                attemptCount: Value(attemptCount),
-                nextAttemptAt: Value(nextAttemptAt),
-                processingToken: const Value(null),
-                lastErrorCode: Value(errorCode),
-                lastErrorMessage: Value(errorMessage),
-              ),
-            );
-    return updated == 1;
+    return _db.transaction(() async {
+      final token = row.processingToken;
+      if (token == null) return false;
+      final updated =
+          await (_db.update(_db.syncOutbox)..where(
+                (t) =>
+                    t.id.equals(row.id) &
+                    t.status.equals(SyncStatus.processing.wireName) &
+                    t.processingToken.equals(token),
+              ))
+              .write(
+                SyncOutboxCompanion(
+                  status: Value(SyncStatus.retrying.wireName),
+                  attemptCount: Value(attemptCount),
+                  nextAttemptAt: Value(nextAttemptAt),
+                  processingToken: const Value(null),
+                  lastErrorCode: Value(errorCode),
+                  lastErrorMessage: Value(errorMessage),
+                ),
+              );
+      if (updated != 1) return false;
+      await _writeAggregateStatus(row, status: await _aggregateStatus(row));
+      return true;
+    });
   }
 
   /// Kalıcı ret veya çatışma: outbox ve müşteri birlikte işaretlenir; kayıt
@@ -347,8 +356,39 @@ class OutboxRepository {
                 ),
               );
       if (updated != 1) return false;
-      await _writeAggregateStatus(row, status: status, errorCode: errorCode);
+      await _writeAggregateStatus(
+        row,
+        status: await _aggregateStatus(row),
+        errorCode: errorCode,
+      );
       return true;
     });
+  }
+
+  /// Aggregate, ancak zincirdeki bütün operasyonlar başarıyla bittiyse
+  /// `synced` olabilir. Bir önceki olayın başarısı, arkasındaki bekleyen veya
+  /// tekrar denenecek işi gizlememelidir.
+  Future<SyncStatus> _aggregateStatus(SyncOutboxRow row) async {
+    final operations =
+        await (_db.select(_db.syncOutbox)..where(
+              (t) =>
+                  t.aggregateType.equals(row.aggregateType) &
+                  t.aggregateId.equals(row.aggregateId),
+            ))
+            .get();
+    final statuses = operations
+        .map((operation) => SyncStatus.fromWire(operation.status))
+        .toSet();
+    for (final status in const [
+      SyncStatus.conflicted,
+      SyncStatus.rejected,
+      SyncStatus.retrying,
+      SyncStatus.processing,
+      SyncStatus.pending,
+      SyncStatus.localOnly,
+    ]) {
+      if (statuses.contains(status)) return status;
+    }
+    return SyncStatus.synced;
   }
 }

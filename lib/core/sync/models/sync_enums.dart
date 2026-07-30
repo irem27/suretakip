@@ -24,7 +24,13 @@ enum SyncOperationType {
   resumeSession,
   addSessionProduct,
   completeSession,
-  cancelSession;
+  cancelSession,
+  createProduct,
+  updateProduct,
+  setProductActive,
+  createService,
+  updateService,
+  setServiceActive;
 
   String get wireName => name;
 

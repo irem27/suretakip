@@ -9,7 +9,9 @@ import 'package:suretakip/core/sync/customer_sync_rpc.dart';
 import 'package:suretakip/core/sync/models/sync_enums.dart';
 import 'package:suretakip/core/sync/models/sync_push_result.dart';
 import 'package:suretakip/core/sync/outbox_repository.dart';
+import 'package:suretakip/core/sync/product_sync_rpc.dart';
 import 'package:suretakip/core/sync/retry_policy.dart';
+import 'package:suretakip/core/sync/service_sync_rpc.dart';
 import 'package:suretakip/core/sync/session_sync_rpc.dart';
 import 'package:suretakip/core/sync/sync_error_classifier.dart';
 
@@ -38,6 +40,16 @@ class SyncEngine {
     required CustomerSyncApi customerRpc,
     required SessionSyncApi sessionRpc,
     required SyncSessionGuard sessionGuard,
+    // Ürün/hizmet RPC'leri opsiyoneldir (geriye dönük uyumluluk): mevcut
+    // müşteri/seans testleri bunları hiç geçmeden çalışmaya devam eder.
+    // Fabrika fonksiyonu olarak alınır (TEMBEL): Riverpod provider grafiğinde
+    // yalnızca dispatch sırasında ilgili operasyon türüne rastlanırsa
+    // çağrılır — böylece `productSyncApiProvider`/`serviceSyncApiProvider`
+    // (ve onların `supabaseClientProvider` bağımlılığı), müşteri/seans
+    // testlerinde override edilmemiş olsa bile SyncEngine inşa anında
+    // TETİKLENMEZ.
+    ProductSyncApi Function()? productRpc,
+    ServiceSyncApi Function()? serviceRpc,
     RetryPolicy? retryPolicy,
     SyncErrorClassifier classifier = const SyncErrorClassifier(),
     DateTime Function()? clock,
@@ -47,6 +59,8 @@ class SyncEngine {
   }) : _outbox = outbox,
        _customerRpc = customerRpc,
        _sessionRpc = sessionRpc,
+       _productRpc = productRpc,
+       _serviceRpc = serviceRpc,
        _sessionGuard = sessionGuard,
        _retryPolicy = retryPolicy ?? RetryPolicy(),
        _classifier = classifier,
@@ -58,6 +72,8 @@ class SyncEngine {
   final OutboxRepository _outbox;
   final CustomerSyncApi _customerRpc;
   final SessionSyncApi _sessionRpc;
+  final ProductSyncApi Function()? _productRpc;
+  final ServiceSyncApi Function()? _serviceRpc;
   final SyncSessionGuard _sessionGuard;
   final RetryPolicy _retryPolicy;
   final SyncErrorClassifier _classifier;
@@ -187,6 +203,60 @@ class SyncEngine {
           expectedVersion: row.expectedServerVersion ?? 0,
           payloadVersion: row.payloadVersion,
         );
+      case SyncOperationType.createProduct:
+        return _requireProductRpc().createProduct(
+          operationId: row.operationId,
+          idempotencyKey: row.idempotencyKey,
+          businessId: row.businessId,
+          product: payload,
+          payloadVersion: row.payloadVersion,
+        );
+      case SyncOperationType.updateProduct:
+        return _requireProductRpc().updateProduct(
+          operationId: row.operationId,
+          idempotencyKey: row.idempotencyKey,
+          businessId: row.businessId,
+          product: payload,
+          expectedVersion: row.expectedServerVersion ?? 0,
+          payloadVersion: row.payloadVersion,
+        );
+      case SyncOperationType.setProductActive:
+        return _requireProductRpc().setProductActive(
+          operationId: row.operationId,
+          idempotencyKey: row.idempotencyKey,
+          businessId: row.businessId,
+          productId: payload['id'] as String,
+          isActive: payload['is_active'] as bool,
+          expectedVersion: row.expectedServerVersion ?? 0,
+          payloadVersion: row.payloadVersion,
+        );
+      case SyncOperationType.createService:
+        return _requireServiceRpc().createService(
+          operationId: row.operationId,
+          idempotencyKey: row.idempotencyKey,
+          businessId: row.businessId,
+          service: payload,
+          payloadVersion: row.payloadVersion,
+        );
+      case SyncOperationType.updateService:
+        return _requireServiceRpc().updateService(
+          operationId: row.operationId,
+          idempotencyKey: row.idempotencyKey,
+          businessId: row.businessId,
+          service: payload,
+          expectedVersion: row.expectedServerVersion ?? 0,
+          payloadVersion: row.payloadVersion,
+        );
+      case SyncOperationType.setServiceActive:
+        return _requireServiceRpc().setServiceActive(
+          operationId: row.operationId,
+          idempotencyKey: row.idempotencyKey,
+          businessId: row.businessId,
+          serviceId: payload['id'] as String,
+          isActive: payload['is_active'] as bool,
+          expectedVersion: row.expectedServerVersion ?? 0,
+          payloadVersion: row.payloadVersion,
+        );
       case SyncOperationType.startSession:
         return _sessionRpc.startSession(
           operationId: row.operationId,
@@ -208,6 +278,22 @@ class SyncEngine {
           payloadVersion: row.payloadVersion,
         );
     }
+  }
+
+  ProductSyncApi _requireProductRpc() {
+    final factory = _productRpc;
+    if (factory == null) {
+      throw StateError('SyncEngine.productRpc yapılandırılmadı.');
+    }
+    return factory();
+  }
+
+  ServiceSyncApi _requireServiceRpc() {
+    final factory = _serviceRpc;
+    if (factory == null) {
+      throw StateError('SyncEngine.serviceRpc yapılandırılmadı.');
+    }
+    return factory();
   }
 
   Future<_Outcome> _handleResult(

@@ -1,0 +1,12 @@
+# Offline EDIT — bölüm 2/2 (İNTERNET KESİK): müşteri detayında pasife al/aktifleştir.
+# launchApp/clearState YOK — 03a'nın açtığı detay ekranını sürdürür. Offline-first
+# yerel yazım + kuyruk; bağlantı gelince sunucuya senkronize olmalı.
+appId: com.suretakip.app
+---
+- assertVisible: "Müşteri Detayı"
+- tapOn:
+    text: "Pasife Al|Aktifleştir"
+- extendedWaitUntil:
+    visible: "Müşteri pasife alındı.*|Müşteri yeniden aktifleştirildi.*"
+    timeout: 15000
+- takeScreenshot: offline-edit-toggled

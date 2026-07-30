@@ -18,6 +18,18 @@ class LocalProducts extends Table {
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
 
+  /// Offline-first yazma yolu (Bölüm 8, müşteri deseniyle birebir aynı):
+  /// local_only, pending, processing, retrying, synced, conflicted, rejected.
+  /// Sunucudan gelen read-through kayıtlar `synced` ile yazılır.
+  TextColumn get syncStatus =>
+      text().withDefault(const Constant('synced'))();
+  IntColumn get serverVersion => integer().nullable()();
+  BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+
+  /// Kullanıcıya güvenle gösterilebilecek son hata kodu.
+  TextColumn get lastSyncError => text().nullable()();
+
   @override
   Set<Column<Object>> get primaryKey => {id};
 }

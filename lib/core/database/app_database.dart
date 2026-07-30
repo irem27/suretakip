@@ -42,7 +42,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forExecutor(super.executor);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -78,6 +78,25 @@ class AppDatabase extends _$AppDatabase {
       if (from < 8) {
         await m.createTable(localServices);
         await m.createTable(localProducts);
+      }
+      // v9: ürün + hizmet katalog yazma yolu offline-first (müşteri
+      // deseniyle birebir aynı sync_status/server_version/tombstone alanları).
+      // NOT: from < 8 ise localServices/localProducts bu migration'da YENİ
+      // oluşturulur (yukarıdaki blok) ve canlı tablo tanımı zaten v9
+      // kolonlarını içerir; bu durumda addColumn tekrarı "duplicate column"
+      // hatası verir. Bu yüzden yalnız v8'den v9'a yükselen (tablo daha önce
+      // v9 kolonları OLMADAN var olan) cihazlarda addColumn çalıştırılır.
+      if (from < 9 && from >= 8) {
+        await m.addColumn(localProducts, localProducts.syncStatus);
+        await m.addColumn(localProducts, localProducts.serverVersion);
+        await m.addColumn(localProducts, localProducts.isDeleted);
+        await m.addColumn(localProducts, localProducts.deletedAt);
+        await m.addColumn(localProducts, localProducts.lastSyncError);
+        await m.addColumn(localServices, localServices.syncStatus);
+        await m.addColumn(localServices, localServices.serverVersion);
+        await m.addColumn(localServices, localServices.isDeleted);
+        await m.addColumn(localServices, localServices.deletedAt);
+        await m.addColumn(localServices, localServices.lastSyncError);
       }
     },
   );

@@ -5,6 +5,7 @@ import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/providers/sync_providers.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
 import 'package:suretakip/core/errors/domain_exception.dart';
+import 'package:suretakip/core/sync/offline_bootstrap.dart';
 import 'package:suretakip/core/utils/business_date_ranges.dart';
 import 'package:suretakip/core/value_objects/money.dart';
 import 'package:suretakip/features/dashboard/domain/entities/dashboard_metrics.dart';
@@ -74,6 +75,9 @@ class DashboardController
           .getMetrics(businessId: businessId);
       if (!_isDisposed && arg.businessId == businessId) {
         state = AsyncData(metrics);
+        // Online doğrulandı: referans kataloglarını (müşteri/hizmet/ürün) yerele
+        // ısıt ki kullanıcı sonra çevrimdışı kalsa da her fonksiyon çalışsın.
+        unawaited(ref.read(offlineBootstrapProvider).warm(businessId));
       }
     } on NetworkException catch (error, stack) {
       if (_isDisposed || arg.businessId != businessId) return;

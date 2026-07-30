@@ -268,6 +268,26 @@ class OutboxRepository {
             serverVersion: Value(serverVersion),
           ),
         );
+      case 'product':
+        await (_db.update(
+          _db.localProducts,
+        )..where((t) => t.id.equals(row.aggregateId))).write(
+          LocalProductsCompanion(
+            syncStatus: Value(status.wireName),
+            serverVersion: Value(serverVersion),
+            lastSyncError: Value(errorCode),
+          ),
+        );
+      case 'service':
+        await (_db.update(
+          _db.localServices,
+        )..where((t) => t.id.equals(row.aggregateId))).write(
+          LocalServicesCompanion(
+            syncStatus: Value(status.wireName),
+            serverVersion: Value(serverVersion),
+            lastSyncError: Value(errorCode),
+          ),
+        );
     }
   }
 

@@ -1,0 +1,11 @@
+# Ortak ONLINE prelude: giriş yap, Ana Sayfa'da bırak (önbellek ısınır).
+# Offline senaryolardan önce çalıştırılır; ardından script ağı keser.
+appId: com.suretakip.app
+env:
+  MAESTRO_EMAIL: "test@suretakip.com"
+  MAESTRO_PASSWORD: "Test1234!"
+---
+- runFlow: ../subflows/launch.yaml
+- runFlow: ../subflows/login.yaml
+- assertVisible: "Ana Sayfa"
+- takeScreenshot: offline-prelude-ana-sayfa

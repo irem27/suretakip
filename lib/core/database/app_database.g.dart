@@ -4719,6 +4719,66 @@ class $LocalServicesTable extends LocalServices
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
+    'syncStatus',
+  );
+  @override
+  late final GeneratedColumn<String> syncStatus = GeneratedColumn<String>(
+    'sync_status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('synced'),
+  );
+  static const VerificationMeta _serverVersionMeta = const VerificationMeta(
+    'serverVersion',
+  );
+  @override
+  late final GeneratedColumn<int> serverVersion = GeneratedColumn<int>(
+    'server_version',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
+    'isDeleted',
+  );
+  @override
+  late final GeneratedColumn<bool> isDeleted = GeneratedColumn<bool>(
+    'is_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastSyncErrorMeta = const VerificationMeta(
+    'lastSyncError',
+  );
+  @override
+  late final GeneratedColumn<String> lastSyncError = GeneratedColumn<String>(
+    'last_sync_error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -4732,6 +4792,11 @@ class $LocalServicesTable extends LocalServices
     archivedAt,
     createdAt,
     updatedAt,
+    syncStatus,
+    serverVersion,
+    isDeleted,
+    deletedAt,
+    lastSyncError,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -4838,6 +4903,42 @@ class $LocalServicesTable extends LocalServices
     } else if (isInserting) {
       context.missing(_updatedAtMeta);
     }
+    if (data.containsKey('sync_status')) {
+      context.handle(
+        _syncStatusMeta,
+        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
+      );
+    }
+    if (data.containsKey('server_version')) {
+      context.handle(
+        _serverVersionMeta,
+        serverVersion.isAcceptableOrUnknown(
+          data['server_version']!,
+          _serverVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(
+        _isDeletedMeta,
+        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
+      );
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('last_sync_error')) {
+      context.handle(
+        _lastSyncErrorMeta,
+        lastSyncError.isAcceptableOrUnknown(
+          data['last_sync_error']!,
+          _lastSyncErrorMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -4891,6 +4992,26 @@ class $LocalServicesTable extends LocalServices
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
       )!,
+      syncStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sync_status'],
+      )!,
+      serverVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}server_version'],
+      ),
+      isDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_deleted'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      lastSyncError: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_sync_error'],
+      ),
     );
   }
 
@@ -4912,6 +5033,17 @@ class LocalServiceRow extends DataClass implements Insertable<LocalServiceRow> {
   final DateTime? archivedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Offline-first yazma yolu (Bölüm 8, müşteri deseniyle birebir aynı):
+  /// local_only, pending, processing, retrying, synced, conflicted, rejected.
+  /// Sunucudan gelen read-through kayıtlar `synced` ile yazılır.
+  final String syncStatus;
+  final int? serverVersion;
+  final bool isDeleted;
+  final DateTime? deletedAt;
+
+  /// Kullanıcıya güvenle gösterilebilecek son hata kodu.
+  final String? lastSyncError;
   const LocalServiceRow({
     required this.id,
     required this.businessId,
@@ -4924,6 +5056,11 @@ class LocalServiceRow extends DataClass implements Insertable<LocalServiceRow> {
     this.archivedAt,
     required this.createdAt,
     required this.updatedAt,
+    required this.syncStatus,
+    this.serverVersion,
+    required this.isDeleted,
+    this.deletedAt,
+    this.lastSyncError,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4941,6 +5078,17 @@ class LocalServiceRow extends DataClass implements Insertable<LocalServiceRow> {
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['sync_status'] = Variable<String>(syncStatus);
+    if (!nullToAbsent || serverVersion != null) {
+      map['server_version'] = Variable<int>(serverVersion);
+    }
+    map['is_deleted'] = Variable<bool>(isDeleted);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    if (!nullToAbsent || lastSyncError != null) {
+      map['last_sync_error'] = Variable<String>(lastSyncError);
+    }
     return map;
   }
 
@@ -4959,6 +5107,17 @@ class LocalServiceRow extends DataClass implements Insertable<LocalServiceRow> {
           : Value(archivedAt),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
+      syncStatus: Value(syncStatus),
+      serverVersion: serverVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverVersion),
+      isDeleted: Value(isDeleted),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      lastSyncError: lastSyncError == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastSyncError),
     );
   }
 
@@ -4985,6 +5144,11 @@ class LocalServiceRow extends DataClass implements Insertable<LocalServiceRow> {
       archivedAt: serializer.fromJson<DateTime?>(json['archivedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      syncStatus: serializer.fromJson<String>(json['syncStatus']),
+      serverVersion: serializer.fromJson<int?>(json['serverVersion']),
+      isDeleted: serializer.fromJson<bool>(json['isDeleted']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      lastSyncError: serializer.fromJson<String?>(json['lastSyncError']),
     );
   }
   @override
@@ -5004,6 +5168,11 @@ class LocalServiceRow extends DataClass implements Insertable<LocalServiceRow> {
       'archivedAt': serializer.toJson<DateTime?>(archivedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'syncStatus': serializer.toJson<String>(syncStatus),
+      'serverVersion': serializer.toJson<int?>(serverVersion),
+      'isDeleted': serializer.toJson<bool>(isDeleted),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'lastSyncError': serializer.toJson<String?>(lastSyncError),
     };
   }
 
@@ -5019,6 +5188,11 @@ class LocalServiceRow extends DataClass implements Insertable<LocalServiceRow> {
     Value<DateTime?> archivedAt = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? syncStatus,
+    Value<int?> serverVersion = const Value.absent(),
+    bool? isDeleted,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    Value<String?> lastSyncError = const Value.absent(),
   }) => LocalServiceRow(
     id: id ?? this.id,
     businessId: businessId ?? this.businessId,
@@ -5032,6 +5206,15 @@ class LocalServiceRow extends DataClass implements Insertable<LocalServiceRow> {
     archivedAt: archivedAt.present ? archivedAt.value : this.archivedAt,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    syncStatus: syncStatus ?? this.syncStatus,
+    serverVersion: serverVersion.present
+        ? serverVersion.value
+        : this.serverVersion,
+    isDeleted: isDeleted ?? this.isDeleted,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    lastSyncError: lastSyncError.present
+        ? lastSyncError.value
+        : this.lastSyncError,
   );
   LocalServiceRow copyWithCompanion(LocalServicesCompanion data) {
     return LocalServiceRow(
@@ -5058,6 +5241,17 @@ class LocalServiceRow extends DataClass implements Insertable<LocalServiceRow> {
           : this.archivedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      syncStatus: data.syncStatus.present
+          ? data.syncStatus.value
+          : this.syncStatus,
+      serverVersion: data.serverVersion.present
+          ? data.serverVersion.value
+          : this.serverVersion,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      lastSyncError: data.lastSyncError.present
+          ? data.lastSyncError.value
+          : this.lastSyncError,
     );
   }
 
@@ -5074,7 +5268,12 @@ class LocalServiceRow extends DataClass implements Insertable<LocalServiceRow> {
           ..write('isActive: $isActive, ')
           ..write('archivedAt: $archivedAt, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('syncStatus: $syncStatus, ')
+          ..write('serverVersion: $serverVersion, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('lastSyncError: $lastSyncError')
           ..write(')'))
         .toString();
   }
@@ -5092,6 +5291,11 @@ class LocalServiceRow extends DataClass implements Insertable<LocalServiceRow> {
     archivedAt,
     createdAt,
     updatedAt,
+    syncStatus,
+    serverVersion,
+    isDeleted,
+    deletedAt,
+    lastSyncError,
   );
   @override
   bool operator ==(Object other) =>
@@ -5107,7 +5311,12 @@ class LocalServiceRow extends DataClass implements Insertable<LocalServiceRow> {
           other.isActive == this.isActive &&
           other.archivedAt == this.archivedAt &&
           other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.syncStatus == this.syncStatus &&
+          other.serverVersion == this.serverVersion &&
+          other.isDeleted == this.isDeleted &&
+          other.deletedAt == this.deletedAt &&
+          other.lastSyncError == this.lastSyncError);
 }
 
 class LocalServicesCompanion extends UpdateCompanion<LocalServiceRow> {
@@ -5122,6 +5331,11 @@ class LocalServicesCompanion extends UpdateCompanion<LocalServiceRow> {
   final Value<DateTime?> archivedAt;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
+  final Value<String> syncStatus;
+  final Value<int?> serverVersion;
+  final Value<bool> isDeleted;
+  final Value<DateTime?> deletedAt;
+  final Value<String?> lastSyncError;
   final Value<int> rowid;
   const LocalServicesCompanion({
     this.id = const Value.absent(),
@@ -5135,6 +5349,11 @@ class LocalServicesCompanion extends UpdateCompanion<LocalServiceRow> {
     this.archivedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.syncStatus = const Value.absent(),
+    this.serverVersion = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.lastSyncError = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   LocalServicesCompanion.insert({
@@ -5149,6 +5368,11 @@ class LocalServicesCompanion extends UpdateCompanion<LocalServiceRow> {
     this.archivedAt = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
+    this.syncStatus = const Value.absent(),
+    this.serverVersion = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.lastSyncError = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        businessId = Value(businessId),
@@ -5171,6 +5395,11 @@ class LocalServicesCompanion extends UpdateCompanion<LocalServiceRow> {
     Expression<DateTime>? archivedAt,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
+    Expression<String>? syncStatus,
+    Expression<int>? serverVersion,
+    Expression<bool>? isDeleted,
+    Expression<DateTime>? deletedAt,
+    Expression<String>? lastSyncError,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -5188,6 +5417,11 @@ class LocalServicesCompanion extends UpdateCompanion<LocalServiceRow> {
       if (archivedAt != null) 'archived_at': archivedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (syncStatus != null) 'sync_status': syncStatus,
+      if (serverVersion != null) 'server_version': serverVersion,
+      if (isDeleted != null) 'is_deleted': isDeleted,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (lastSyncError != null) 'last_sync_error': lastSyncError,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -5204,6 +5438,11 @@ class LocalServicesCompanion extends UpdateCompanion<LocalServiceRow> {
     Value<DateTime?>? archivedAt,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
+    Value<String>? syncStatus,
+    Value<int?>? serverVersion,
+    Value<bool>? isDeleted,
+    Value<DateTime?>? deletedAt,
+    Value<String?>? lastSyncError,
     Value<int>? rowid,
   }) {
     return LocalServicesCompanion(
@@ -5219,6 +5458,11 @@ class LocalServicesCompanion extends UpdateCompanion<LocalServiceRow> {
       archivedAt: archivedAt ?? this.archivedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      syncStatus: syncStatus ?? this.syncStatus,
+      serverVersion: serverVersion ?? this.serverVersion,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedAt: deletedAt ?? this.deletedAt,
+      lastSyncError: lastSyncError ?? this.lastSyncError,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -5261,6 +5505,21 @@ class LocalServicesCompanion extends UpdateCompanion<LocalServiceRow> {
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
+    if (syncStatus.present) {
+      map['sync_status'] = Variable<String>(syncStatus.value);
+    }
+    if (serverVersion.present) {
+      map['server_version'] = Variable<int>(serverVersion.value);
+    }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<bool>(isDeleted.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (lastSyncError.present) {
+      map['last_sync_error'] = Variable<String>(lastSyncError.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -5281,6 +5540,11 @@ class LocalServicesCompanion extends UpdateCompanion<LocalServiceRow> {
           ..write('archivedAt: $archivedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('syncStatus: $syncStatus, ')
+          ..write('serverVersion: $serverVersion, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('lastSyncError: $lastSyncError, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -5428,6 +5692,66 @@ class $LocalProductsTable extends LocalProducts
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
+    'syncStatus',
+  );
+  @override
+  late final GeneratedColumn<String> syncStatus = GeneratedColumn<String>(
+    'sync_status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('synced'),
+  );
+  static const VerificationMeta _serverVersionMeta = const VerificationMeta(
+    'serverVersion',
+  );
+  @override
+  late final GeneratedColumn<int> serverVersion = GeneratedColumn<int>(
+    'server_version',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isDeletedMeta = const VerificationMeta(
+    'isDeleted',
+  );
+  @override
+  late final GeneratedColumn<bool> isDeleted = GeneratedColumn<bool>(
+    'is_deleted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_deleted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastSyncErrorMeta = const VerificationMeta(
+    'lastSyncError',
+  );
+  @override
+  late final GeneratedColumn<String> lastSyncError = GeneratedColumn<String>(
+    'last_sync_error',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -5442,6 +5766,11 @@ class $LocalProductsTable extends LocalProducts
     archivedAt,
     createdAt,
     updatedAt,
+    syncStatus,
+    serverVersion,
+    isDeleted,
+    deletedAt,
+    lastSyncError,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -5547,6 +5876,42 @@ class $LocalProductsTable extends LocalProducts
     } else if (isInserting) {
       context.missing(_updatedAtMeta);
     }
+    if (data.containsKey('sync_status')) {
+      context.handle(
+        _syncStatusMeta,
+        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
+      );
+    }
+    if (data.containsKey('server_version')) {
+      context.handle(
+        _serverVersionMeta,
+        serverVersion.isAcceptableOrUnknown(
+          data['server_version']!,
+          _serverVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_deleted')) {
+      context.handle(
+        _isDeletedMeta,
+        isDeleted.isAcceptableOrUnknown(data['is_deleted']!, _isDeletedMeta),
+      );
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    if (data.containsKey('last_sync_error')) {
+      context.handle(
+        _lastSyncErrorMeta,
+        lastSyncError.isAcceptableOrUnknown(
+          data['last_sync_error']!,
+          _lastSyncErrorMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -5604,6 +5969,26 @@ class $LocalProductsTable extends LocalProducts
         DriftSqlType.dateTime,
         data['${effectivePrefix}updated_at'],
       )!,
+      syncStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sync_status'],
+      )!,
+      serverVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}server_version'],
+      ),
+      isDeleted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_deleted'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+      lastSyncError: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_sync_error'],
+      ),
     );
   }
 
@@ -5626,6 +6011,17 @@ class LocalProductRow extends DataClass implements Insertable<LocalProductRow> {
   final DateTime? archivedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Offline-first yazma yolu (Bölüm 8, müşteri deseniyle birebir aynı):
+  /// local_only, pending, processing, retrying, synced, conflicted, rejected.
+  /// Sunucudan gelen read-through kayıtlar `synced` ile yazılır.
+  final String syncStatus;
+  final int? serverVersion;
+  final bool isDeleted;
+  final DateTime? deletedAt;
+
+  /// Kullanıcıya güvenle gösterilebilecek son hata kodu.
+  final String? lastSyncError;
   const LocalProductRow({
     required this.id,
     required this.businessId,
@@ -5639,6 +6035,11 @@ class LocalProductRow extends DataClass implements Insertable<LocalProductRow> {
     this.archivedAt,
     required this.createdAt,
     required this.updatedAt,
+    required this.syncStatus,
+    this.serverVersion,
+    required this.isDeleted,
+    this.deletedAt,
+    this.lastSyncError,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -5659,6 +6060,17 @@ class LocalProductRow extends DataClass implements Insertable<LocalProductRow> {
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
+    map['sync_status'] = Variable<String>(syncStatus);
+    if (!nullToAbsent || serverVersion != null) {
+      map['server_version'] = Variable<int>(serverVersion);
+    }
+    map['is_deleted'] = Variable<bool>(isDeleted);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    if (!nullToAbsent || lastSyncError != null) {
+      map['last_sync_error'] = Variable<String>(lastSyncError);
+    }
     return map;
   }
 
@@ -5678,6 +6090,17 @@ class LocalProductRow extends DataClass implements Insertable<LocalProductRow> {
           : Value(archivedAt),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
+      syncStatus: Value(syncStatus),
+      serverVersion: serverVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(serverVersion),
+      isDeleted: Value(isDeleted),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+      lastSyncError: lastSyncError == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastSyncError),
     );
   }
 
@@ -5699,6 +6122,11 @@ class LocalProductRow extends DataClass implements Insertable<LocalProductRow> {
       archivedAt: serializer.fromJson<DateTime?>(json['archivedAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      syncStatus: serializer.fromJson<String>(json['syncStatus']),
+      serverVersion: serializer.fromJson<int?>(json['serverVersion']),
+      isDeleted: serializer.fromJson<bool>(json['isDeleted']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      lastSyncError: serializer.fromJson<String?>(json['lastSyncError']),
     );
   }
   @override
@@ -5717,6 +6145,11 @@ class LocalProductRow extends DataClass implements Insertable<LocalProductRow> {
       'archivedAt': serializer.toJson<DateTime?>(archivedAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'syncStatus': serializer.toJson<String>(syncStatus),
+      'serverVersion': serializer.toJson<int?>(serverVersion),
+      'isDeleted': serializer.toJson<bool>(isDeleted),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'lastSyncError': serializer.toJson<String?>(lastSyncError),
     };
   }
 
@@ -5733,6 +6166,11 @@ class LocalProductRow extends DataClass implements Insertable<LocalProductRow> {
     Value<DateTime?> archivedAt = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? syncStatus,
+    Value<int?> serverVersion = const Value.absent(),
+    bool? isDeleted,
+    Value<DateTime?> deletedAt = const Value.absent(),
+    Value<String?> lastSyncError = const Value.absent(),
   }) => LocalProductRow(
     id: id ?? this.id,
     businessId: businessId ?? this.businessId,
@@ -5746,6 +6184,15 @@ class LocalProductRow extends DataClass implements Insertable<LocalProductRow> {
     archivedAt: archivedAt.present ? archivedAt.value : this.archivedAt,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    syncStatus: syncStatus ?? this.syncStatus,
+    serverVersion: serverVersion.present
+        ? serverVersion.value
+        : this.serverVersion,
+    isDeleted: isDeleted ?? this.isDeleted,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    lastSyncError: lastSyncError.present
+        ? lastSyncError.value
+        : this.lastSyncError,
   );
   LocalProductRow copyWithCompanion(LocalProductsCompanion data) {
     return LocalProductRow(
@@ -5773,6 +6220,17 @@ class LocalProductRow extends DataClass implements Insertable<LocalProductRow> {
           : this.archivedAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      syncStatus: data.syncStatus.present
+          ? data.syncStatus.value
+          : this.syncStatus,
+      serverVersion: data.serverVersion.present
+          ? data.serverVersion.value
+          : this.serverVersion,
+      isDeleted: data.isDeleted.present ? data.isDeleted.value : this.isDeleted,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      lastSyncError: data.lastSyncError.present
+          ? data.lastSyncError.value
+          : this.lastSyncError,
     );
   }
 
@@ -5790,7 +6248,12 @@ class LocalProductRow extends DataClass implements Insertable<LocalProductRow> {
           ..write('isActive: $isActive, ')
           ..write('archivedAt: $archivedAt, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('syncStatus: $syncStatus, ')
+          ..write('serverVersion: $serverVersion, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('lastSyncError: $lastSyncError')
           ..write(')'))
         .toString();
   }
@@ -5809,6 +6272,11 @@ class LocalProductRow extends DataClass implements Insertable<LocalProductRow> {
     archivedAt,
     createdAt,
     updatedAt,
+    syncStatus,
+    serverVersion,
+    isDeleted,
+    deletedAt,
+    lastSyncError,
   );
   @override
   bool operator ==(Object other) =>
@@ -5825,7 +6293,12 @@ class LocalProductRow extends DataClass implements Insertable<LocalProductRow> {
           other.isActive == this.isActive &&
           other.archivedAt == this.archivedAt &&
           other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.syncStatus == this.syncStatus &&
+          other.serverVersion == this.serverVersion &&
+          other.isDeleted == this.isDeleted &&
+          other.deletedAt == this.deletedAt &&
+          other.lastSyncError == this.lastSyncError);
 }
 
 class LocalProductsCompanion extends UpdateCompanion<LocalProductRow> {
@@ -5841,6 +6314,11 @@ class LocalProductsCompanion extends UpdateCompanion<LocalProductRow> {
   final Value<DateTime?> archivedAt;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
+  final Value<String> syncStatus;
+  final Value<int?> serverVersion;
+  final Value<bool> isDeleted;
+  final Value<DateTime?> deletedAt;
+  final Value<String?> lastSyncError;
   final Value<int> rowid;
   const LocalProductsCompanion({
     this.id = const Value.absent(),
@@ -5855,6 +6333,11 @@ class LocalProductsCompanion extends UpdateCompanion<LocalProductRow> {
     this.archivedAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.syncStatus = const Value.absent(),
+    this.serverVersion = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.lastSyncError = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   LocalProductsCompanion.insert({
@@ -5870,6 +6353,11 @@ class LocalProductsCompanion extends UpdateCompanion<LocalProductRow> {
     this.archivedAt = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
+    this.syncStatus = const Value.absent(),
+    this.serverVersion = const Value.absent(),
+    this.isDeleted = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.lastSyncError = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        businessId = Value(businessId),
@@ -5891,6 +6379,11 @@ class LocalProductsCompanion extends UpdateCompanion<LocalProductRow> {
     Expression<DateTime>? archivedAt,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
+    Expression<String>? syncStatus,
+    Expression<int>? serverVersion,
+    Expression<bool>? isDeleted,
+    Expression<DateTime>? deletedAt,
+    Expression<String>? lastSyncError,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -5906,6 +6399,11 @@ class LocalProductsCompanion extends UpdateCompanion<LocalProductRow> {
       if (archivedAt != null) 'archived_at': archivedAt,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (syncStatus != null) 'sync_status': syncStatus,
+      if (serverVersion != null) 'server_version': serverVersion,
+      if (isDeleted != null) 'is_deleted': isDeleted,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (lastSyncError != null) 'last_sync_error': lastSyncError,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -5923,6 +6421,11 @@ class LocalProductsCompanion extends UpdateCompanion<LocalProductRow> {
     Value<DateTime?>? archivedAt,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
+    Value<String>? syncStatus,
+    Value<int?>? serverVersion,
+    Value<bool>? isDeleted,
+    Value<DateTime?>? deletedAt,
+    Value<String?>? lastSyncError,
     Value<int>? rowid,
   }) {
     return LocalProductsCompanion(
@@ -5938,6 +6441,11 @@ class LocalProductsCompanion extends UpdateCompanion<LocalProductRow> {
       archivedAt: archivedAt ?? this.archivedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      syncStatus: syncStatus ?? this.syncStatus,
+      serverVersion: serverVersion ?? this.serverVersion,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedAt: deletedAt ?? this.deletedAt,
+      lastSyncError: lastSyncError ?? this.lastSyncError,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -5981,6 +6489,21 @@ class LocalProductsCompanion extends UpdateCompanion<LocalProductRow> {
     if (updatedAt.present) {
       map['updated_at'] = Variable<DateTime>(updatedAt.value);
     }
+    if (syncStatus.present) {
+      map['sync_status'] = Variable<String>(syncStatus.value);
+    }
+    if (serverVersion.present) {
+      map['server_version'] = Variable<int>(serverVersion.value);
+    }
+    if (isDeleted.present) {
+      map['is_deleted'] = Variable<bool>(isDeleted.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (lastSyncError.present) {
+      map['last_sync_error'] = Variable<String>(lastSyncError.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -6002,6 +6525,11 @@ class LocalProductsCompanion extends UpdateCompanion<LocalProductRow> {
           ..write('archivedAt: $archivedAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('syncStatus: $syncStatus, ')
+          ..write('serverVersion: $serverVersion, ')
+          ..write('isDeleted: $isDeleted, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('lastSyncError: $lastSyncError, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -11454,6 +11982,11 @@ typedef $$LocalServicesTableCreateCompanionBuilder =
       Value<DateTime?> archivedAt,
       required DateTime createdAt,
       required DateTime updatedAt,
+      Value<String> syncStatus,
+      Value<int?> serverVersion,
+      Value<bool> isDeleted,
+      Value<DateTime?> deletedAt,
+      Value<String?> lastSyncError,
       Value<int> rowid,
     });
 typedef $$LocalServicesTableUpdateCompanionBuilder =
@@ -11469,6 +12002,11 @@ typedef $$LocalServicesTableUpdateCompanionBuilder =
       Value<DateTime?> archivedAt,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
+      Value<String> syncStatus,
+      Value<int?> serverVersion,
+      Value<bool> isDeleted,
+      Value<DateTime?> deletedAt,
+      Value<String?> lastSyncError,
       Value<int> rowid,
     });
 
@@ -11533,6 +12071,31 @@ class $$LocalServicesTableFilterComposer
 
   ColumnFilters<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get serverVersion => $composableBuilder(
+    column: $table.serverVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastSyncError => $composableBuilder(
+    column: $table.lastSyncError,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -11600,6 +12163,31 @@ class $$LocalServicesTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get serverVersion => $composableBuilder(
+    column: $table.serverVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastSyncError => $composableBuilder(
+    column: $table.lastSyncError,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$LocalServicesTableAnnotationComposer
@@ -11655,6 +12243,27 @@ class $$LocalServicesTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get serverVersion => $composableBuilder(
+    column: $table.serverVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isDeleted =>
+      $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get lastSyncError => $composableBuilder(
+    column: $table.lastSyncError,
+    builder: (column) => column,
+  );
 }
 
 class $$LocalServicesTableTableManager
@@ -11699,6 +12308,11 @@ class $$LocalServicesTableTableManager
                 Value<DateTime?> archivedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<String> syncStatus = const Value.absent(),
+                Value<int?> serverVersion = const Value.absent(),
+                Value<bool> isDeleted = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String?> lastSyncError = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => LocalServicesCompanion(
                 id: id,
@@ -11712,6 +12326,11 @@ class $$LocalServicesTableTableManager
                 archivedAt: archivedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                syncStatus: syncStatus,
+                serverVersion: serverVersion,
+                isDeleted: isDeleted,
+                deletedAt: deletedAt,
+                lastSyncError: lastSyncError,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -11727,6 +12346,11 @@ class $$LocalServicesTableTableManager
                 Value<DateTime?> archivedAt = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
+                Value<String> syncStatus = const Value.absent(),
+                Value<int?> serverVersion = const Value.absent(),
+                Value<bool> isDeleted = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String?> lastSyncError = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => LocalServicesCompanion.insert(
                 id: id,
@@ -11740,6 +12364,11 @@ class $$LocalServicesTableTableManager
                 archivedAt: archivedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                syncStatus: syncStatus,
+                serverVersion: serverVersion,
+                isDeleted: isDeleted,
+                deletedAt: deletedAt,
+                lastSyncError: lastSyncError,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -11781,6 +12410,11 @@ typedef $$LocalProductsTableCreateCompanionBuilder =
       Value<DateTime?> archivedAt,
       required DateTime createdAt,
       required DateTime updatedAt,
+      Value<String> syncStatus,
+      Value<int?> serverVersion,
+      Value<bool> isDeleted,
+      Value<DateTime?> deletedAt,
+      Value<String?> lastSyncError,
       Value<int> rowid,
     });
 typedef $$LocalProductsTableUpdateCompanionBuilder =
@@ -11797,6 +12431,11 @@ typedef $$LocalProductsTableUpdateCompanionBuilder =
       Value<DateTime?> archivedAt,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
+      Value<String> syncStatus,
+      Value<int?> serverVersion,
+      Value<bool> isDeleted,
+      Value<DateTime?> deletedAt,
+      Value<String?> lastSyncError,
       Value<int> rowid,
     });
 
@@ -11866,6 +12505,31 @@ class $$LocalProductsTableFilterComposer
 
   ColumnFilters<DateTime> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get serverVersion => $composableBuilder(
+    column: $table.serverVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastSyncError => $composableBuilder(
+    column: $table.lastSyncError,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -11938,6 +12602,31 @@ class $$LocalProductsTableOrderingComposer
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get serverVersion => $composableBuilder(
+    column: $table.serverVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isDeleted => $composableBuilder(
+    column: $table.isDeleted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastSyncError => $composableBuilder(
+    column: $table.lastSyncError,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$LocalProductsTableAnnotationComposer
@@ -11996,6 +12685,27 @@ class $$LocalProductsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get serverVersion => $composableBuilder(
+    column: $table.serverVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isDeleted =>
+      $composableBuilder(column: $table.isDeleted, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get lastSyncError => $composableBuilder(
+    column: $table.lastSyncError,
+    builder: (column) => column,
+  );
 }
 
 class $$LocalProductsTableTableManager
@@ -12041,6 +12751,11 @@ class $$LocalProductsTableTableManager
                 Value<DateTime?> archivedAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<String> syncStatus = const Value.absent(),
+                Value<int?> serverVersion = const Value.absent(),
+                Value<bool> isDeleted = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String?> lastSyncError = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => LocalProductsCompanion(
                 id: id,
@@ -12055,6 +12770,11 @@ class $$LocalProductsTableTableManager
                 archivedAt: archivedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                syncStatus: syncStatus,
+                serverVersion: serverVersion,
+                isDeleted: isDeleted,
+                deletedAt: deletedAt,
+                lastSyncError: lastSyncError,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -12071,6 +12791,11 @@ class $$LocalProductsTableTableManager
                 Value<DateTime?> archivedAt = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
+                Value<String> syncStatus = const Value.absent(),
+                Value<int?> serverVersion = const Value.absent(),
+                Value<bool> isDeleted = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String?> lastSyncError = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => LocalProductsCompanion.insert(
                 id: id,
@@ -12085,6 +12810,11 @@ class $$LocalProductsTableTableManager
                 archivedAt: archivedAt,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                syncStatus: syncStatus,
+                serverVersion: serverVersion,
+                isDeleted: isDeleted,
+                deletedAt: deletedAt,
+                lastSyncError: lastSyncError,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

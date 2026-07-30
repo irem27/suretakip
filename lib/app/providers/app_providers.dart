@@ -1,13 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:suretakip/app/providers/sync_providers.dart';
 import 'package:suretakip/core/database/app_database.dart';
 import 'package:suretakip/core/logging/app_logger_provider.dart';
 import 'package:suretakip/features/businesses/data/local/businesses_local_data_source.dart';
 import 'package:suretakip/features/businesses/data/repositories/cached_businesses_repository.dart';
 import 'package:suretakip/features/products/data/local/products_local_data_source.dart';
-import 'package:suretakip/features/products/data/repositories/cached_products_repository.dart';
+import 'package:suretakip/features/products/data/repositories/offline_products_repository.dart';
 import 'package:suretakip/features/services/data/local/services_local_data_source.dart';
-import 'package:suretakip/features/services/data/repositories/cached_services_repository.dart';
+import 'package:suretakip/features/services/data/repositories/offline_services_repository.dart';
 import 'package:suretakip/features/auth/data/datasources/auth_remote_data_source.dart';
 import 'package:suretakip/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:suretakip/features/auth/domain/entities/auth_session_state.dart';
@@ -217,16 +218,33 @@ final servicesLocalDataSourceProvider = Provider<ServicesLocalDataSource>(
   (ref) => ServicesLocalDataSource(ref.watch(appDatabaseProvider)),
 );
 
-final servicesRepositoryProvider = Provider<ServicesRepository>((ref) {
-  return CachedServicesRepository(
+// Offline-first (Sprint 1, müşteri deseniyle birebir aynı): write yolu her
+// zaman yerel + outbox'tan geçer, `remote` yalnız önbellek boşken/tazeleme
+// için kullanılır. Bu tanım kasıtlı olarak `sync_providers.dart`'taki
+// `syncEngineProvider`/`deviceIdentityProvider`'ı paylaşır (dosyalar arası
+// döngüsel import Dart'ta geçerlidir; her iki taraf da yalnız lazy Provider
+// closure'ları içerir).
+// Concrete offline repo (pullFromServer gibi offline'a özel metotlar için).
+final offlineServicesRepositoryProvider = Provider<OfflineServicesRepository>((
+  ref,
+) {
+  return OfflineServicesRepository(
+    local: ref.watch(servicesLocalDataSourceProvider),
     remote: ServicesRepositoryImpl(
       ref.watch(servicesRemoteDataSourceProvider),
       logger: ref.watch(appLoggerProvider),
     ),
-    local: ref.watch(servicesLocalDataSourceProvider),
+    deviceIdentity: ref.watch(deviceIdentityProvider),
+    syncEngine: ref.watch(syncEngineProvider),
+    currentActorUserId: () =>
+        ref.read(supabaseClientProvider).auth.currentUser?.id,
     logger: ref.watch(appLoggerProvider),
   );
 });
+
+final servicesRepositoryProvider = Provider<ServicesRepository>(
+  (ref) => ref.watch(offlineServicesRepositoryProvider),
+);
 
 final productsRemoteDataSourceProvider = Provider<ProductsRemoteDataSource>(
   (ref) => ProductsRemoteDataSource(ref.watch(supabaseClientProvider)),
@@ -236,16 +254,26 @@ final productsLocalDataSourceProvider = Provider<ProductsLocalDataSource>(
   (ref) => ProductsLocalDataSource(ref.watch(appDatabaseProvider)),
 );
 
-final productsRepositoryProvider = Provider<ProductsRepository>((ref) {
-  return CachedProductsRepository(
+final offlineProductsRepositoryProvider = Provider<OfflineProductsRepository>((
+  ref,
+) {
+  return OfflineProductsRepository(
+    local: ref.watch(productsLocalDataSourceProvider),
     remote: ProductsRepositoryImpl(
       ref.watch(productsRemoteDataSourceProvider),
       logger: ref.watch(appLoggerProvider),
     ),
-    local: ref.watch(productsLocalDataSourceProvider),
+    deviceIdentity: ref.watch(deviceIdentityProvider),
+    syncEngine: ref.watch(syncEngineProvider),
+    currentActorUserId: () =>
+        ref.read(supabaseClientProvider).auth.currentUser?.id,
     logger: ref.watch(appLoggerProvider),
   );
 });
+
+final productsRepositoryProvider = Provider<ProductsRepository>(
+  (ref) => ref.watch(offlineProductsRepositoryProvider),
+);
 
 final customersRemoteDataSourceProvider = Provider<CustomersRemoteDataSource>(
   (ref) => CustomersRemoteDataSource(ref.watch(supabaseClientProvider)),

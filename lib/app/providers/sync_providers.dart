@@ -9,6 +9,9 @@ import 'package:suretakip/core/sync/device_identity.dart';
 import 'package:suretakip/core/sync/outbox_repository.dart';
 import 'package:suretakip/core/sync/customer_delta_store.dart';
 import 'package:suretakip/core/sync/customer_delta_sync_service.dart';
+import 'package:suretakip/core/sync/offline_bootstrap.dart';
+import 'package:suretakip/core/sync/product_sync_rpc.dart';
+import 'package:suretakip/core/sync/service_sync_rpc.dart';
 import 'package:suretakip/core/sync/session_sync_rpc.dart';
 import 'package:suretakip/core/sync/session_snapshot_sync_service.dart';
 import 'package:suretakip/core/sync/sync_engine.dart';
@@ -43,6 +46,18 @@ final sessionSyncApiProvider = Provider<SessionSyncApi>(
   (ref) => SessionSyncRpc(ref.watch(supabaseClientProvider)),
 );
 
+final productSyncApiProvider = Provider<ProductSyncApi>(
+  (ref) => ProductSyncRpc(ref.watch(supabaseClientProvider)),
+);
+
+final serviceSyncApiProvider = Provider<ServiceSyncApi>(
+  (ref) => ServiceSyncRpc(ref.watch(supabaseClientProvider)),
+);
+
+// productsLocalDataSourceProvider ve servicesLocalDataSourceProvider zaten
+// app_providers.dart'ta tanımlı (CachedProducts/ServicesRepository ile
+// paylaşılır); burada yeniden tanımlanmaz, doğrudan kullanılır.
+
 final sessionsLocalDataSourceProvider = Provider<SessionsLocalDataSource>(
   (ref) => SessionsLocalDataSource(ref.watch(appDatabaseProvider)),
 );
@@ -56,6 +71,11 @@ final syncEngineProvider = Provider<SyncEngine>(
     outbox: ref.watch(outboxRepositoryProvider),
     customerRpc: ref.watch(customerSyncApiProvider),
     sessionRpc: ref.watch(sessionSyncApiProvider),
+    // TEMBEL: yalnız ürün/hizmet outbox operasyonu dispatch edilirken
+    // çağrılır; müşteri/seans akışlarında `productSyncApiProvider`/
+    // `serviceSyncApiProvider` (ve `supabaseClientProvider`) hiç tetiklenmez.
+    productRpc: () => ref.read(productSyncApiProvider),
+    serviceRpc: () => ref.read(serviceSyncApiProvider),
     sessionGuard: ref.watch(syncSessionGuardProvider),
     // Yalnız oturumdaki kullanıcının kendi işletmesindeki outbox kayıtları
     // gönderilir (ortak cihaz izolasyonu, Bölüm 16.2).
@@ -102,6 +122,9 @@ Future<void> _runFullSync(Ref ref) async {
   if (businessId != null) {
     await ref.read(customerDeltaSyncServiceProvider).sync(businessId);
     await ref.read(sessionSnapshotSyncServiceProvider).sync(businessId);
+    // Bağlantı geri geldiğinde/foreground'da hizmet+ürün kataloglarını da
+    // yerele ısıt ki sonraki çevrimdışı dönemde her fonksiyon çalışsın.
+    await ref.read(offlineBootstrapProvider).warm(businessId);
   }
 }
 
@@ -135,6 +158,13 @@ final offlineCustomersRepositoryProvider = Provider<OfflineCustomersRepository>(
     logger: ref.watch(appLoggerProvider),
   ),
 );
+
+// offlineProductsRepositoryProvider/offlineServicesRepositoryProvider ayrıca
+// TANIMLANMAZ: `productsRepositoryProvider`/`servicesRepositoryProvider`
+// (app_providers.dart) artık doğrudan OfflineProductsRepository/
+// OfflineServicesRepository döndürür — müşteri/seans ile aynı iskelet,
+// tek fark: mevcut controller/UI katmanını değiştirmemek için repository
+// SÖZLEŞMESİ (interface) korunarak "drop-in" bağlanmıştır.
 
 final offlineSessionsRepositoryProvider = Provider<OfflineSessionsRepository>(
   (ref) => OfflineSessionsRepository(

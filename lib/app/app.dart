@@ -21,6 +21,14 @@ class App extends ConsumerWidget {
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system,
       routerConfig: appRouter,
+      // Alan dışına dokununca klavyeyi kapat: hem beklenen UX hem de sabit
+      // alt-bar butonlarının (ör. "Müşteriyi Kaydet") klavye altında
+      // erişilemez kalmasını önler.
+      builder: (context, child) => GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: child,
+      ),
     );
   }
 }

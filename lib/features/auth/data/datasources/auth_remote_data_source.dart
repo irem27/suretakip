@@ -24,7 +24,18 @@ class AuthRemoteDataSource {
   }
 
   Future<void> signUp({required String email, required String password}) async {
-    await _client.auth.signUp(email: email, password: password);
+    final response = await _client.auth.signUp(email: email, password: password);
+    // Supabase, e-posta zaten kayıtlıysa (anti-enumeration) hata vermez; sahte
+    // bir kullanıcı döndürür ve `identities` boş gelir. Bunu açık bir hataya
+    // çeviririz ki kullanıcı "zaten kayıtlı" uyarısını görsün (repository
+    // katmanı 'user_already_exists' kodunu uygun mesaja çevirir).
+    final identities = response.user?.identities;
+    if (identities != null && identities.isEmpty) {
+      throw const AuthException(
+        'Bu e-posta zaten kayıtlı.',
+        code: 'user_already_exists',
+      );
+    }
   }
 
   Future<void> sendPasswordResetEmail({required String email}) async {

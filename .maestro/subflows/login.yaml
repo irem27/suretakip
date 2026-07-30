@@ -7,7 +7,6 @@ appId: com.suretakip.app
 - inputText: ${MAESTRO_EMAIL}
 - tapOn: "Şifre"
 - inputText: ${MAESTRO_PASSWORD}
-- hideKeyboard
 - tapOn:
     text: "Giriş Yap"
     index: 0

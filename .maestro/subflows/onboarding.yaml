@@ -14,7 +14,6 @@ appId: com.suretakip.app
 # Adım 1/5 — İşletme adı (alan hint="İşletme adı")
 - tapOn: "İşletme adı"
 - inputText: "Test İşletme"
-- hideKeyboard
 - tapOn: "Devam Et"
 - waitForAnimationToEnd
 
@@ -32,11 +31,9 @@ appId: com.suretakip.app
     timeout: 10000
 - tapOn: "Hizmet adı"
 - inputText: "Standart Hizmet"
-- hideKeyboard
 - tapOn:
     text: "Dakika ücreti.*"
 - inputText: "10"
-- hideKeyboard
 - tapOn: "Devam Et"
 - waitForAnimationToEnd
 
@@ -50,11 +47,9 @@ appId: com.suretakip.app
     timeout: 8000
 - tapOn: "Ürün adı"
 - inputText: "Standart Ürün"
-- hideKeyboard
 - tapOn:
     text: "Satış fiyatı.*"
 - inputText: "50"
-- hideKeyboard
 - tapOn: "Kurulumu Tamamla"
 
 # Kurulum bitti → Ana Sayfa

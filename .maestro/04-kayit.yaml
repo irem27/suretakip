@@ -7,14 +7,23 @@ tags:
 ---
 - runFlow: subflows/launch.yaml
 - tapOn: "Hesabınız yok mu? Kayıt olun"
-- assertVisible: "Kayıt Ol"
+# "Kayıt Ol" iOS'ta listede aşağıda/klavye altında olabilir → görünür olana kaydır
+- scrollUntilVisible:
+    element:
+      text: "Kayıt Ol"
+    direction: DOWN
+    timeout: 10000
 - tapOn: "E-posta"
 - inputText: "yeni@suretakip.com"
 - tapOn: "Şifre"
 - inputText: "Test1234!"
 - tapOn: "Şifre tekrarı"
 - inputText: "Baska9999!"
-- hideKeyboard
+- scrollUntilVisible:
+    element:
+      text: "Kayıt Ol"
+    direction: DOWN
+    timeout: 10000
 - tapOn:
     text: "Kayıt Ol"
     index: 0

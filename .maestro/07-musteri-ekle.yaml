@@ -19,10 +19,12 @@ env:
     timeout: 10000
 - tapOn: "Ad soyad"
 - inputText: "Maestro Test Müşterisi"
-- hideKeyboard
+# Başlığa dokunarak klavyeyi kapat (app kökündeki dışarı-tıkla-kapat); böylece
+# alt-bardaki "Müşteriyi Kaydet" klavye altında kalmaz. Çapraz-platform.
+- tapOn: "Yeni Müşteri"
 - tapOn: "Müşteriyi Kaydet"
-# Kayıt sonrası müşteri listede görünür
+# Kayıt başarılıysa müşteri detayına gidilir (pushReplacement).
 - extendedWaitUntil:
-    visible: "Maestro Test Müşterisi"
+    visible: "Müşteri Detayı"
     timeout: 15000
 - takeScreenshot: musteri-eklendi

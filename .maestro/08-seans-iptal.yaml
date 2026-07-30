@@ -17,15 +17,25 @@ env:
     visible: "Müşteri seç"
     timeout: 15000
 - tapOn: "Misafir müşteri.*"
-- assertVisible: "Hizmet seç"
+- scrollUntilVisible:
+    element:
+      text: "Hizmet: Standart Hizmet"
+    direction: DOWN
+    timeout: 10000
 - tapOn: "Hizmet: Standart Hizmet"
+- scrollUntilVisible:
+    element:
+      text: "Süreyi Başlat"
+    direction: DOWN
+    timeout: 10000
 - tapOn: "Süreyi Başlat"
 - extendedWaitUntil:
     visible: "İşlem Detayı"
     timeout: 20000
 
-# 2) Aktif seansı bırakıp başka iş yap: geri dön, Müşteriler sekmesine uğra
-- back
+# 2) Aktif seansı bırakıp başka iş yap: geri dön (AppBar "Geri"; iOS'ta donanım
+#    back yok, tuşa basmak çapraz-platform çalışır), Müşteriler sekmesine uğra
+- tapOn: "Geri"
 - extendedWaitUntil:
     visible: "Ana Sayfa"
     timeout: 15000

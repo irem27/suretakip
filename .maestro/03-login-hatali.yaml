@@ -9,7 +9,6 @@ tags:
 - inputText: "yanlis@suretakip.com"
 - tapOn: "Şifre"
 - inputText: "hataliSifre"
-- hideKeyboard
 - tapOn:
     text: "Giriş Yap"
     index: 0

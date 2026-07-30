@@ -21,11 +21,20 @@ env:
 # 2) Müşteri: misafir (Semantics label tam metin → .*)
 - tapOn: "Misafir müşteri.*"
 
-# 3) Hizmet seç (Semantics label "Hizmet: <ad>")
-- assertVisible: "Hizmet seç"
+# 3) Hizmet seç (Semantics label "Hizmet: <ad>"; iOS'ta listede aşağıda olabilir)
+- scrollUntilVisible:
+    element:
+      text: "Hizmet: Standart Hizmet"
+    direction: DOWN
+    timeout: 10000
 - tapOn: "Hizmet: Standart Hizmet"
 
-# 4) Süreyi başlat → aktif seans açılır
+# 4) Süreyi başlat → aktif seans açılır ("Süreyi Başlat" listenin altında)
+- scrollUntilVisible:
+    element:
+      text: "Süreyi Başlat"
+    direction: DOWN
+    timeout: 10000
 - tapOn: "Süreyi Başlat"
 - extendedWaitUntil:
     visible: "İşlem Detayı"

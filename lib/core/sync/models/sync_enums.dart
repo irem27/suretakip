@@ -30,7 +30,8 @@ enum SyncOperationType {
   setProductActive,
   createService,
   updateService,
-  setServiceActive;
+  setServiceActive,
+  recordSessionPayment;
 
   String get wireName => name;
 

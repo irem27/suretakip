@@ -25,6 +25,9 @@ import 'package:suretakip/features/customers/domain/repositories/customers_repos
 import 'package:suretakip/features/dashboard/data/datasources/dashboard_remote_data_source.dart';
 import 'package:suretakip/features/dashboard/data/repositories/dashboard_repository_impl.dart';
 import 'package:suretakip/features/dashboard/domain/repositories/dashboard_repository.dart';
+import 'package:suretakip/features/payments/data/datasources/payments_remote_data_source.dart';
+import 'package:suretakip/features/payments/data/repositories/payments_repository_impl.dart';
+import 'package:suretakip/features/payments/domain/repositories/payments_repository.dart';
 import 'package:suretakip/features/products/data/datasources/products_remote_data_source.dart';
 import 'package:suretakip/features/products/data/repositories/products_repository_impl.dart';
 import 'package:suretakip/features/products/domain/repositories/products_repository.dart';
@@ -295,6 +298,29 @@ final sessionsRepositoryProvider = Provider<SessionsRepository>((ref) {
     ref.watch(sessionsRemoteDataSourceProvider),
     logger: ref.watch(appLoggerProvider),
   );
+});
+
+final paymentsRemoteDataSourceProvider = Provider<PaymentsRemoteDataSource>(
+  (ref) => PaymentsRemoteDataSource(ref.watch(supabaseClientProvider)),
+);
+
+/// Sunucu-otoriteli çevrimiçi uygulama (`record_session_payment` RPC'sini
+/// doğrudan çağırır). Offline-first kararı için bkz.
+/// `OfflinePaymentsRepository` dosya başı açıklaması.
+final paymentsRemoteRepositoryProvider = Provider<PaymentsRepository>((ref) {
+  return PaymentsRepositoryImpl(
+    ref.watch(paymentsRemoteDataSourceProvider),
+    logger: ref.watch(appLoggerProvider),
+  );
+});
+
+/// Müşteri/ürün/seans ile aynı "drop-in" fikri: controller/UI bu sözleşmeyi
+/// (interface) hiç değiştirmeden çevrimdışı yazma yoluna geçer. Yalnız
+/// `recordSessionPayment` cihazda kuyruğa alınabilir; okuma + void/iade
+/// sunucu-otoriteli kalır (bkz. `sync_providers.dart` ->
+/// `offlinePaymentsRepositoryProvider`).
+final paymentsRepositoryProvider = Provider<PaymentsRepository>((ref) {
+  return ref.watch(offlinePaymentsRepositoryProvider);
 });
 
 final dashboardRemoteDataSourceProvider = Provider<DashboardRemoteDataSource>(

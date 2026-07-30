@@ -56,6 +56,15 @@ class OutboxRepository {
         );
   }
 
+  /// Aynı idempotency key ile daha önce kuyruğa alınmış bir operasyon var mı?
+  /// Çağıran, aynı niyeti (ör. bir ödeme retry'ı) tekrar kuyruğa EKLEMEDEN
+  /// önce bunu kontrol ederek çift outbox kaydı (ve dolayısıyla sunucuya
+  /// çift gönderim denemesi) oluşmasını engeller.
+  Future<SyncOutboxRow?> findByIdempotencyKey(String idempotencyKey) =>
+      (_db.select(
+        _db.syncOutbox,
+      )..where((t) => t.idempotencyKey.equals(idempotencyKey))).getSingleOrNull();
+
   /// Bir aggregate için en son (en yüksek sıra) outbox operasyon kimliği.
   /// Yeni event'in `depends_on` zincirini kurmakta kullanılır.
   Future<String?> latestOperationId(

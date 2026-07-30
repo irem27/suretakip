@@ -9,6 +9,7 @@ import 'package:suretakip/core/sync/customer_sync_rpc.dart';
 import 'package:suretakip/core/sync/models/sync_enums.dart';
 import 'package:suretakip/core/sync/models/sync_push_result.dart';
 import 'package:suretakip/core/sync/outbox_repository.dart';
+import 'package:suretakip/core/sync/payment_sync_rpc.dart';
 import 'package:suretakip/core/sync/product_sync_rpc.dart';
 import 'package:suretakip/core/sync/retry_policy.dart';
 import 'package:suretakip/core/sync/service_sync_rpc.dart';
@@ -50,6 +51,9 @@ class SyncEngine {
     // TETİKLENMEZ.
     ProductSyncApi Function()? productRpc,
     ServiceSyncApi Function()? serviceRpc,
+    // Ödeme RPC'si de aynı gerekçeyle TEMBEL alınır: yalnız
+    // `recordSessionPayment` outbox operasyonu dispatch edilirken çağrılır.
+    PaymentSyncApi Function()? paymentRpc,
     RetryPolicy? retryPolicy,
     SyncErrorClassifier classifier = const SyncErrorClassifier(),
     DateTime Function()? clock,
@@ -61,6 +65,7 @@ class SyncEngine {
        _sessionRpc = sessionRpc,
        _productRpc = productRpc,
        _serviceRpc = serviceRpc,
+       _paymentRpc = paymentRpc,
        _sessionGuard = sessionGuard,
        _retryPolicy = retryPolicy ?? RetryPolicy(),
        _classifier = classifier,
@@ -74,6 +79,7 @@ class SyncEngine {
   final SessionSyncApi _sessionRpc;
   final ProductSyncApi Function()? _productRpc;
   final ServiceSyncApi Function()? _serviceRpc;
+  final PaymentSyncApi Function()? _paymentRpc;
   final SyncSessionGuard _sessionGuard;
   final RetryPolicy _retryPolicy;
   final SyncErrorClassifier _classifier;
@@ -277,7 +283,23 @@ class SyncEngine {
           event: payload,
           payloadVersion: row.payloadVersion,
         );
+      case SyncOperationType.recordSessionPayment:
+        return _requirePaymentRpc().recordSessionPayment(
+          operationId: row.operationId,
+          idempotencyKey: row.idempotencyKey,
+          businessId: row.businessId,
+          payment: payload,
+          payloadVersion: row.payloadVersion,
+        );
     }
+  }
+
+  PaymentSyncApi _requirePaymentRpc() {
+    final factory = _paymentRpc;
+    if (factory == null) {
+      throw StateError('SyncEngine.paymentRpc yapılandırılmadı.');
+    }
+    return factory();
   }
 
   ProductSyncApi _requireProductRpc() {

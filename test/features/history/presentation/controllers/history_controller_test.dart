@@ -14,7 +14,6 @@ import 'package:suretakip/features/history/presentation/controllers/history_cont
 import 'package:suretakip/features/payments/domain/entities/payment.dart';
 import 'package:suretakip/features/payments/domain/entities/session_payment_status_summary.dart';
 import 'package:suretakip/features/payments/domain/repositories/payments_repository.dart';
-import 'package:suretakip/features/payments/presentation/controllers/payments_controller.dart';
 import 'package:suretakip/core/value_objects/money.dart';
 import 'package:suretakip/features/services/domain/entities/service.dart';
 import 'package:suretakip/features/services/domain/repositories/services_repository.dart';

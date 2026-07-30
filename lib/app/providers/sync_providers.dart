@@ -10,6 +10,7 @@ import 'package:suretakip/core/sync/outbox_repository.dart';
 import 'package:suretakip/core/sync/customer_delta_store.dart';
 import 'package:suretakip/core/sync/customer_delta_sync_service.dart';
 import 'package:suretakip/core/sync/offline_bootstrap.dart';
+import 'package:suretakip/core/sync/payment_sync_rpc.dart';
 import 'package:suretakip/core/sync/product_sync_rpc.dart';
 import 'package:suretakip/core/sync/service_sync_rpc.dart';
 import 'package:suretakip/core/sync/session_sync_rpc.dart';
@@ -19,6 +20,7 @@ import 'package:suretakip/core/sync/sync_pull_rpc.dart';
 import 'package:suretakip/core/sync/sync_trigger_service.dart';
 import 'package:suretakip/features/customers/data/local/customers_local_data_source.dart';
 import 'package:suretakip/features/customers/data/repositories/offline_customers_repository.dart';
+import 'package:suretakip/features/payments/data/repositories/offline_payments_repository.dart';
 import 'package:suretakip/features/sessions/data/local/sessions_local_data_source.dart';
 import 'package:suretakip/features/sessions/data/repositories/offline_sessions_repository.dart';
 
@@ -54,6 +56,10 @@ final serviceSyncApiProvider = Provider<ServiceSyncApi>(
   (ref) => ServiceSyncRpc(ref.watch(supabaseClientProvider)),
 );
 
+final paymentSyncApiProvider = Provider<PaymentSyncApi>(
+  (ref) => PaymentSyncRpc(ref.watch(supabaseClientProvider)),
+);
+
 // productsLocalDataSourceProvider ve servicesLocalDataSourceProvider zaten
 // app_providers.dart'ta tanımlı (CachedProducts/ServicesRepository ile
 // paylaşılır); burada yeniden tanımlanmaz, doğrudan kullanılır.
@@ -76,6 +82,9 @@ final syncEngineProvider = Provider<SyncEngine>(
     // `serviceSyncApiProvider` (ve `supabaseClientProvider`) hiç tetiklenmez.
     productRpc: () => ref.read(productSyncApiProvider),
     serviceRpc: () => ref.read(serviceSyncApiProvider),
+    // Aynı TEMBEL gerekçe: yalnız `recordSessionPayment` outbox operasyonu
+    // dispatch edilirken çağrılır.
+    paymentRpc: () => ref.read(paymentSyncApiProvider),
     sessionGuard: ref.watch(syncSessionGuardProvider),
     // Yalnız oturumdaki kullanıcının kendi işletmesindeki outbox kayıtları
     // gönderilir (ortak cihaz izolasyonu, Bölüm 16.2).
@@ -173,6 +182,24 @@ final offlineSessionsRepositoryProvider = Provider<OfflineSessionsRepository>(
     outbox: ref.watch(outboxRepositoryProvider),
     deviceIdentity: ref.watch(deviceIdentityProvider),
     syncEngine: ref.watch(syncEngineProvider),
+    logger: ref.watch(appLoggerProvider),
+  ),
+);
+
+/// `paymentsRepositoryProvider` (payments_controller.dart) bu depoyu
+/// döndürür — müşteri/ürün/seans ile aynı "drop-in" fikri, tek fark:
+/// yalnız `recordSessionPayment` çevrimdışı kuyruğa alınır (bkz.
+/// `OfflinePaymentsRepository` dosya başı açıklaması).
+final offlinePaymentsRepositoryProvider = Provider<OfflinePaymentsRepository>(
+  (ref) => OfflinePaymentsRepository(
+    remote: ref.watch(paymentsRemoteRepositoryProvider),
+    db: ref.watch(appDatabaseProvider),
+    sessionsLocal: ref.watch(sessionsLocalDataSourceProvider),
+    outbox: ref.watch(outboxRepositoryProvider),
+    deviceIdentity: ref.watch(deviceIdentityProvider),
+    syncEngine: ref.watch(syncEngineProvider),
+    currentActorUserId: () =>
+        ref.read(supabaseClientProvider).auth.currentUser?.id,
     logger: ref.watch(appLoggerProvider),
   ),
 );

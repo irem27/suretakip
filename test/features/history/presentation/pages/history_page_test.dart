@@ -16,7 +16,6 @@ import 'package:suretakip/features/history/presentation/pages/history_page.dart'
 import 'package:suretakip/features/payments/domain/entities/payment.dart';
 import 'package:suretakip/features/payments/domain/entities/session_payment_status_summary.dart';
 import 'package:suretakip/features/payments/domain/repositories/payments_repository.dart';
-import 'package:suretakip/features/payments/presentation/controllers/payments_controller.dart';
 import 'package:suretakip/features/payments/presentation/widgets/payment_status_badge.dart';
 import 'package:suretakip/features/services/domain/entities/service.dart';
 import 'package:suretakip/features/services/domain/repositories/services_repository.dart';

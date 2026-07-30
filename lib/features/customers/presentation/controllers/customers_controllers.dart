@@ -134,35 +134,60 @@ class CustomerFormController extends AsyncNotifier<void> {
     return state.hasError ? null : created;
   }
 
+  /// Müşteriyi offline-first günceller: yerel yazım + outbox, sonra push.
+  /// İnternet yoksa değişiklik cihazda kalır ve "bekliyor" olarak görünür.
   Future<Customer?> updateCustomer(Customer customer) async {
+    final scope = ref.read(activeBusinessScopeProvider);
+    final member = await ref.read(currentMemberProvider(scope).future);
+    if (member == null) {
+      state = AsyncError(
+        const ValidationException(
+          'Üyelik bilgisi henüz hazır değil. Lütfen tekrar deneyin.',
+        ),
+        StackTrace.current,
+      );
+      return null;
+    }
+
     Customer? updated;
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      updated = await ref
-          .read(customersRepositoryProvider)
-          .updateCustomer(customer);
-      await _refreshLocal(customer.businessId, customer.id);
+      final row = await ref
+          .read(offlineCustomersRepositoryProvider)
+          .updateCustomer(customer, actorUserId: member.userId);
+      updated = mapLocalCustomerToDomain(row);
+      ref.invalidate(customerDetailProvider(customer.id));
     });
     return state.hasError ? null : updated;
   }
 
+  /// Aktif/pasif değişimini offline-first uygular: yerel yazım + outbox,
+  /// sonra push. İnternet yoksa değişiklik cihazda "bekliyor" kalır.
   Future<bool> setActive(String customerId, {required bool isActive}) async {
+    final scope = ref.read(activeBusinessScopeProvider);
+    final member = await ref.read(currentMemberProvider(scope).future);
+    if (member == null) {
+      state = AsyncError(
+        const ValidationException(
+          'Üyelik bilgisi henüz hazır değil. Lütfen tekrar deneyin.',
+        ),
+        StackTrace.current,
+      );
+      return false;
+    }
+
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      final updated = await ref
-          .read(customersRepositoryProvider)
-          .setCustomerActive(customerId, isActive: isActive);
-      await _refreshLocal(updated.businessId, customerId);
+      await ref
+          .read(offlineCustomersRepositoryProvider)
+          .setCustomerActive(
+            customerId,
+            isActive: isActive,
+            actorUserId: member.userId,
+          );
+      ref.invalidate(customerDetailProvider(customerId));
     });
     return !state.hasError;
-  }
-
-  /// Online güncelleme/aktiflik değişiminden sonra Drift kopyasını tazeler.
-  Future<void> _refreshLocal(String businessId, String customerId) async {
-    await ref
-        .read(offlineCustomersRepositoryProvider)
-        .pullFromServer(businessId);
-    ref.invalidate(customerDetailProvider(customerId));
   }
 }
 

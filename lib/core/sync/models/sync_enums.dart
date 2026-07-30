@@ -17,6 +17,8 @@ enum SyncStatus {
 /// Outbox operasyon türleri (Sprint 1 müşteri + Faz C seans event'leri).
 enum SyncOperationType {
   createCustomer,
+  updateCustomer,
+  setCustomerActive,
   startSession,
   pauseSession,
   resumeSession,

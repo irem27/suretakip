@@ -126,22 +126,83 @@ void main() {
     },
   );
 
-  test('setActive yalnız id ve durumu iletir', () async {
-    final db = AppDatabase.forExecutor(NativeDatabase.memory());
-    addTearDown(db.close);
-    final repository = _FakeCustomersRepository(customers: [_customer()]);
-    final container = _offlineContainer(db, repository);
-    addTearDown(container.dispose);
+  test(
+    'setActive offline-first yerelde günceller ve online repo çağrılmaz',
+    () async {
+      final db = AppDatabase.forExecutor(NativeDatabase.memory());
+      addTearDown(db.close);
+      await db
+          .into(db.localCustomers)
+          .insert(
+            LocalCustomersCompanion.insert(
+              id: 'customer-1',
+              businessId: 'business-1',
+              name: 'Ahmet Erdemir',
+              syncStatus: SyncStatus.synced.wireName,
+              serverVersion: const Value(3),
+              createdAtLocal: DateTime.utc(2026),
+              updatedAtLocal: DateTime.utc(2026),
+            ),
+          );
+      final repository = _FakeCustomersRepository(customers: [_customer()]);
+      final container = _offlineContainer(db, repository);
+      addTearDown(container.dispose);
 
-    final ok = await container
-        .read(customerFormControllerProvider.notifier)
-        .setActive('customer-1', isActive: false);
+      final ok = await container
+          .read(customerFormControllerProvider.notifier)
+          .setActive('customer-1', isActive: false);
 
-    expect(ok, isTrue);
-    expect(repository.toggledId, 'customer-1');
-    expect(repository.toggledActive, isFalse);
-    expect(repository.updatedCustomer, isNull);
-  });
+      expect(ok, isTrue);
+      // Online repository artık kullanılmıyor: setActive tamamen offline-first.
+      expect(repository.toggledId, isNull);
+      expect(repository.updatedCustomer, isNull);
+      final local = await (db.select(
+        db.localCustomers,
+      )..where((t) => t.id.equals('customer-1'))).getSingle();
+      expect(local.isActive, isFalse);
+      expect(local.syncStatus, SyncStatus.pending.wireName);
+      final outboxRows = await db.select(db.syncOutbox).get();
+      expect(outboxRows.single.operationType, 'setCustomerActive');
+    },
+  );
+
+  test(
+    'updateCustomer offline-first yerelde günceller ve online repo çağrılmaz',
+    () async {
+      final db = AppDatabase.forExecutor(NativeDatabase.memory());
+      addTearDown(db.close);
+      await db
+          .into(db.localCustomers)
+          .insert(
+            LocalCustomersCompanion.insert(
+              id: 'customer-1',
+              businessId: 'business-1',
+              name: 'Ahmet Erdemir',
+              syncStatus: SyncStatus.synced.wireName,
+              serverVersion: const Value(2),
+              createdAtLocal: DateTime.utc(2026),
+              updatedAtLocal: DateTime.utc(2026),
+            ),
+          );
+      final repository = _FakeCustomersRepository(customers: [_customer()]);
+      final container = _offlineContainer(db, repository);
+      addTearDown(container.dispose);
+
+      final updated = await container
+          .read(customerFormControllerProvider.notifier)
+          .updateCustomer(_customer(name: 'Ahmet Güncel'));
+
+      expect(updated?.name, 'Ahmet Güncel');
+      expect(repository.updatedCustomer, isNull);
+      final local = await (db.select(
+        db.localCustomers,
+      )..where((t) => t.id.equals('customer-1'))).getSingle();
+      expect(local.name, 'Ahmet Güncel');
+      expect(local.syncStatus, SyncStatus.pending.wireName);
+      final outboxRows = await db.select(db.syncOutbox).get();
+      expect(outboxRows.single.operationType, 'updateCustomer');
+    },
+  );
 }
 
 const BusinessScope _scope = (businessId: 'business-1', generation: 0);
@@ -296,6 +357,27 @@ class _NoopCustomerApi implements CustomerSyncApi {
     required String idempotencyKey,
     required String businessId,
     required Map<String, Object?> customer,
+    required int payloadVersion,
+  }) async => const SyncPushResult(type: SyncResultType.applied);
+
+  @override
+  Future<SyncPushResult> updateCustomer({
+    required String operationId,
+    required String idempotencyKey,
+    required String businessId,
+    required Map<String, Object?> customer,
+    required int expectedVersion,
+    required int payloadVersion,
+  }) async => const SyncPushResult(type: SyncResultType.applied);
+
+  @override
+  Future<SyncPushResult> setCustomerActive({
+    required String operationId,
+    required String idempotencyKey,
+    required String businessId,
+    required String customerId,
+    required bool isActive,
+    required int expectedVersion,
     required int payloadVersion,
   }) async => const SyncPushResult(type: SyncResultType.applied);
 }

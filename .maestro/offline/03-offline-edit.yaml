@@ -1,0 +1,20 @@
+# Offline EDIT — çevrimdışı müşteri düzenleme/aktiflik (yeni offline-first özellik).
+# launchApp/clearState YOK — çalışan oturumu sürdürür. Ağ dışarıdan kesilmişken
+# bir müşteriyi "Pasife Al" ile günceller; offline-first yerel yazım + kuyruk.
+appId: com.suretakip.app
+---
+- assertVisible: "Müşteriler"
+# Listedeki ilk müşteriyi aç (Maestro testlerinden mevcut)
+- tapOn:
+    text: "Maestro Test Müşterisi"
+    index: 0
+- extendedWaitUntil:
+    visible: "Müşteri Detayı"
+    timeout: 10000
+# Çevrimdışı pasife al (setActive) — offline-first
+- tapOn:
+    text: "Pasife Al|Aktifleştir"
+- extendedWaitUntil:
+    visible: "Müşteri pasife alındı.*|Müşteri yeniden aktifleştirildi.*"
+    timeout: 15000
+- takeScreenshot: offline-edit-toggled

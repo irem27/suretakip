@@ -484,6 +484,27 @@ class _NoopCustomerApi implements CustomerSyncApi {
     required Map<String, Object?> customer,
     required int payloadVersion,
   }) async => const SyncPushResult(type: SyncResultType.applied);
+
+  @override
+  Future<SyncPushResult> updateCustomer({
+    required String operationId,
+    required String idempotencyKey,
+    required String businessId,
+    required Map<String, Object?> customer,
+    required int expectedVersion,
+    required int payloadVersion,
+  }) async => const SyncPushResult(type: SyncResultType.applied);
+
+  @override
+  Future<SyncPushResult> setCustomerActive({
+    required String operationId,
+    required String idempotencyKey,
+    required String businessId,
+    required String customerId,
+    required bool isActive,
+    required int expectedVersion,
+    required int payloadVersion,
+  }) async => const SyncPushResult(type: SyncResultType.applied);
 }
 
 Business _business() => Business(

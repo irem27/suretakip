@@ -100,6 +100,67 @@ class OfflineCustomersRepository {
     return row;
   }
 
+  /// Var olan müşteriyi yerelde günceller ve arka planda senkronizasyonu
+  /// tetikler. Push başarısız olsa (ör. offline) da kayıt cihazda "bekliyor"
+  /// olarak korunur; bağlantı gelince otomatik gönderilir.
+  Future<LocalCustomerRow> updateCustomer(
+    Customer customer, {
+    required String actorUserId,
+  }) async {
+    final deviceId = await _deviceIdentity.getOrCreate();
+    final existing = await _local.findCustomer(customer.id);
+    if (existing == null) {
+      throw StateError('Yerel müşteri kaydı bulunamadı: ${customer.id}');
+    }
+    final row = await _local.enqueueUpdateCustomer(
+      EnqueueUpdateCustomer(
+        customerId: customer.id,
+        operationId: _uuid.v4(),
+        businessId: customer.businessId,
+        actorUserId: actorUserId,
+        deviceId: deviceId,
+        name: customer.name,
+        phone: customer.phone,
+        email: customer.email,
+        notes: customer.notes,
+        expectedVersion: existing.serverVersion ?? 1,
+        now: _clock(),
+      ),
+    );
+
+    unawaited(_syncEngine.push().catchError(_handleBackgroundSyncError));
+    return row;
+  }
+
+  /// Müşteriyi yerelde aktif/pasif yapar ve arka planda senkronizasyonu
+  /// tetikler. Push başarısız olsa da kayıt cihazda "bekliyor" olarak korunur.
+  Future<LocalCustomerRow> setCustomerActive(
+    String customerId, {
+    required bool isActive,
+    required String actorUserId,
+  }) async {
+    final deviceId = await _deviceIdentity.getOrCreate();
+    final existing = await _local.findCustomer(customerId);
+    if (existing == null) {
+      throw StateError('Yerel müşteri kaydı bulunamadı: $customerId');
+    }
+    final row = await _local.enqueueSetCustomerActive(
+      EnqueueSetCustomerActive(
+        customerId: customerId,
+        operationId: _uuid.v4(),
+        businessId: existing.businessId,
+        actorUserId: actorUserId,
+        deviceId: deviceId,
+        isActive: isActive,
+        expectedVersion: existing.serverVersion ?? 1,
+        now: _clock(),
+      ),
+    );
+
+    unawaited(_syncEngine.push().catchError(_handleBackgroundSyncError));
+    return row;
+  }
+
   SyncRunSummary _handleBackgroundSyncError(Object error, StackTrace stack) {
     _logger.warn(
       error,

@@ -168,6 +168,25 @@ class SyncEngine {
           customer: payload,
           payloadVersion: row.payloadVersion,
         );
+      case SyncOperationType.updateCustomer:
+        return _customerRpc.updateCustomer(
+          operationId: row.operationId,
+          idempotencyKey: row.idempotencyKey,
+          businessId: row.businessId,
+          customer: payload,
+          expectedVersion: row.expectedServerVersion ?? 0,
+          payloadVersion: row.payloadVersion,
+        );
+      case SyncOperationType.setCustomerActive:
+        return _customerRpc.setCustomerActive(
+          operationId: row.operationId,
+          idempotencyKey: row.idempotencyKey,
+          businessId: row.businessId,
+          customerId: payload['id'] as String,
+          isActive: payload['is_active'] as bool,
+          expectedVersion: row.expectedServerVersion ?? 0,
+          payloadVersion: row.payloadVersion,
+        );
       case SyncOperationType.startSession:
         return _sessionRpc.startSession(
           operationId: row.operationId,

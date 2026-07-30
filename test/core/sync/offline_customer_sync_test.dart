@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suretakip/core/database/app_database.dart';
@@ -16,6 +17,7 @@ import 'package:suretakip/core/auth/sync_session_guard.dart';
 import 'package:suretakip/features/customers/data/local/customers_local_data_source.dart';
 import 'package:suretakip/features/customers/data/datasources/customers_remote_data_source.dart';
 import 'package:suretakip/features/customers/data/repositories/offline_customers_repository.dart';
+import 'package:suretakip/features/customers/domain/entities/customer.dart';
 import 'package:suretakip/features/customers/domain/entities/customer_input.dart';
 
 /// Sunucuyu taklit eden sahte RPC. Sırayla verilen davranışları uygular.
@@ -38,6 +40,48 @@ class _FakeCustomerApi implements CustomerSyncApi {
       'operationId': operationId,
       'idempotencyKey': idempotencyKey,
       'businessId': businessId,
+    });
+    final behavior = behaviors[_index.clamp(0, behaviors.length - 1)];
+    _index++;
+    return behavior();
+  }
+
+  @override
+  Future<SyncPushResult> updateCustomer({
+    required String operationId,
+    required String idempotencyKey,
+    required String businessId,
+    required Map<String, Object?> customer,
+    required int expectedVersion,
+    required int payloadVersion,
+  }) async {
+    calls.add({
+      'operationId': operationId,
+      'idempotencyKey': idempotencyKey,
+      'businessId': businessId,
+      'expectedVersion': expectedVersion,
+    });
+    final behavior = behaviors[_index.clamp(0, behaviors.length - 1)];
+    _index++;
+    return behavior();
+  }
+
+  @override
+  Future<SyncPushResult> setCustomerActive({
+    required String operationId,
+    required String idempotencyKey,
+    required String businessId,
+    required String customerId,
+    required bool isActive,
+    required int expectedVersion,
+    required int payloadVersion,
+  }) async {
+    calls.add({
+      'operationId': operationId,
+      'idempotencyKey': idempotencyKey,
+      'businessId': businessId,
+      'customerId': customerId,
+      'expectedVersion': expectedVersion,
     });
     final behavior = behaviors[_index.clamp(0, behaviors.length - 1)];
     _index++;
@@ -94,6 +138,23 @@ class _UnusedCustomersRemoteDataSource implements CustomersRemoteDataSource {
     DateTime? expectedUpdatedAt,
   }) => throw UnimplementedError();
 }
+
+Customer _customer({
+  required String id,
+  required String businessId,
+  required String name,
+}) => Customer(
+  id: id,
+  businessId: businessId,
+  name: name,
+  phone: null,
+  email: null,
+  notes: null,
+  isActive: true,
+  archivedAt: null,
+  createdAt: DateTime.utc(2026),
+  updatedAt: DateTime.utc(2026),
+);
 
 SyncPushResult _applied() => SyncPushResult(
   type: SyncResultType.applied,
@@ -500,4 +561,149 @@ void main() {
       expect(summaryA.pushed, 1);
     },
   );
+
+  group('offline update ve setActive', () {
+    Future<void> seedCustomer(String id, {int serverVersion = 3}) => db
+        .into(db.localCustomers)
+        .insert(
+          LocalCustomersCompanion.insert(
+            id: id,
+            businessId: 'biz-1',
+            name: 'Ali Veli',
+            syncStatus: SyncStatus.synced.wireName,
+            serverVersion: Value(serverVersion),
+            createdAtLocal: clock(),
+            updatedAtLocal: clock(),
+          ),
+        );
+
+    test(
+      'offline güncelleme yerelde pending yazar ve outbox oluşturur',
+      () async {
+        await seedCustomer('customer-1');
+        final api = _FakeCustomerApi([_applied]);
+        final repo = buildRepo(
+          buildEngine(api, sessionProblem: SyncResultType.authRequired),
+        );
+
+        final row = await repo.updateCustomer(
+          _customer(id: 'customer-1', businessId: 'biz-1', name: 'Ali Güncel'),
+          actorUserId: 'user-1',
+        );
+
+        expect(row.name, 'Ali Güncel');
+        expect(row.syncStatus, SyncStatus.pending.wireName);
+        final outboxRows = await db.select(db.syncOutbox).get();
+        expect(outboxRows.single.operationType, 'updateCustomer');
+        expect(outboxRows.single.expectedServerVersion, 3);
+      },
+    );
+
+    test(
+      'internet gelince update push müşteriyi synced yapar',
+      () async {
+        await seedCustomer('customer-1');
+        final api = _FakeCustomerApi([_applied]);
+        final engine = buildEngine(api);
+        final repo = buildRepo(engine);
+
+        await repo.updateCustomer(
+          _customer(id: 'customer-1', businessId: 'biz-1', name: 'Ali Güncel'),
+          actorUserId: 'user-1',
+        );
+        final summary = await engine.push();
+
+        expect(summary.pushed, 1);
+        final customer = (await db.select(db.localCustomers).get()).single;
+        expect(customer.syncStatus, SyncStatus.synced.wireName);
+        expect(customer.name, 'Ali Güncel');
+      },
+    );
+
+    test(
+      'sync başarısızlığı (offline) çağıranı düşürmez, kayıt korunur',
+      () async {
+        await seedCustomer('customer-1');
+        final api = _FakeCustomerApi([
+          () => throw const SocketException('offline'),
+        ]);
+        final repo = buildRepo(buildEngine(api));
+
+        final row = await repo.updateCustomer(
+          _customer(id: 'customer-1', businessId: 'biz-1', name: 'Ali Güncel'),
+          actorUserId: 'user-1',
+        );
+
+        expect(row.name, 'Ali Güncel');
+        expect(row.syncStatus, SyncStatus.pending.wireName);
+      },
+    );
+
+    test('server_version conflict (STALE_VERSION) kaydı korur, çakışma işaretler', () async {
+      await seedCustomer('customer-1');
+      final api = _FakeCustomerApi([
+        () => const SyncPushResult(
+          type: SyncResultType.conflict,
+          errorCode: 'STALE_VERSION',
+        ),
+      ]);
+      final engine = buildEngine(api);
+      final repo = buildRepo(engine);
+      await repo.updateCustomer(
+        _customer(id: 'customer-1', businessId: 'biz-1', name: 'Ali Güncel'),
+        actorUserId: 'user-1',
+      );
+
+      final summary = await engine.push();
+
+      expect(summary.failed, 1);
+      final customer = (await db.select(db.localCustomers).get()).single;
+      expect(customer.syncStatus, SyncStatus.conflicted.wireName);
+      expect(customer.lastSyncError, 'STALE_VERSION');
+      // Yerel isim değişikliği korunur; kayıt silinmedi.
+      expect(customer.name, 'Ali Güncel');
+    });
+
+    test(
+      'offline aktif/pasif değişimi yerelde pending yazar ve outbox oluşturur',
+      () async {
+        await seedCustomer('customer-1');
+        final api = _FakeCustomerApi([_applied]);
+        final repo = buildRepo(
+          buildEngine(api, sessionProblem: SyncResultType.authRequired),
+        );
+
+        final row = await repo.setCustomerActive(
+          'customer-1',
+          isActive: false,
+          actorUserId: 'user-1',
+        );
+
+        expect(row.isActive, isFalse);
+        expect(row.syncStatus, SyncStatus.pending.wireName);
+        final outboxRows = await db.select(db.syncOutbox).get();
+        expect(outboxRows.single.operationType, 'setCustomerActive');
+        expect(outboxRows.single.expectedServerVersion, 3);
+      },
+    );
+
+    test('internet gelince setActive push müşteriyi synced yapar', () async {
+      await seedCustomer('customer-1');
+      final api = _FakeCustomerApi([_applied]);
+      final engine = buildEngine(api);
+      final repo = buildRepo(engine);
+
+      await repo.setCustomerActive(
+        'customer-1',
+        isActive: false,
+        actorUserId: 'user-1',
+      );
+      final summary = await engine.push();
+
+      expect(summary.pushed, 1);
+      final customer = (await db.select(db.localCustomers).get()).single;
+      expect(customer.syncStatus, SyncStatus.synced.wireName);
+      expect(customer.isActive, isFalse);
+    });
+  });
 }

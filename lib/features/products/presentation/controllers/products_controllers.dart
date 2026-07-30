@@ -97,7 +97,10 @@ class ProductFormController extends AsyncNotifier<void> {
     return state.hasError ? null : updated;
   }
 
+  /// Aktif/pasif toggle. İşlemdeki ürün id'si `productUpdatingIdProvider`'a
+  /// yazılır ki liste yalnızca o kartın anahtarını kilitlesin (tüm liste değil).
   Future<bool> setActive(String productId, {required bool isActive}) async {
+    ref.read(productUpdatingIdProvider.notifier).state = productId;
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       await ref
@@ -108,9 +111,15 @@ class ProductFormController extends AsyncNotifier<void> {
       );
       ref.invalidate(productDetailProvider(productId));
     });
+    // AsyncValue.guard rethrow etmez; başarı/hata fark etmeksizin id temizlenir.
+    ref.read(productUpdatingIdProvider.notifier).state = null;
     return !state.hasError;
   }
 }
+
+/// setActive sırasında güncellenen ürünün id'si; yalnızca ilgili kartın
+/// anahtarını devre dışı bırakmak için liste tarafından okunur.
+final productUpdatingIdProvider = StateProvider<String?>((ref) => null);
 
 final productsListControllerProvider = AsyncNotifierProvider.autoDispose
     .family<ProductsListController, ProductsListState, BusinessScope>(

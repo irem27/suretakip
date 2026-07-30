@@ -98,7 +98,11 @@ class ServiceFormController extends AsyncNotifier<void> {
   }
 
   /// Aktif/pasif toggle — yalnızca durum kolonlarını yazar (kısmi güncelleme).
+  ///
+  /// İşlemdeki hizmet id'si `serviceUpdatingIdProvider`'a yazılır ki liste
+  /// yalnızca o kartın anahtarını kilitlesin (tüm liste değil).
   Future<bool> setActive(String serviceId, {required bool isActive}) async {
+    ref.read(serviceUpdatingIdProvider.notifier).state = serviceId;
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       await ref
@@ -109,9 +113,15 @@ class ServiceFormController extends AsyncNotifier<void> {
       );
       ref.invalidate(serviceDetailProvider(serviceId));
     });
+    // AsyncValue.guard rethrow etmez; başarı/hata fark etmeksizin id temizlenir.
+    ref.read(serviceUpdatingIdProvider.notifier).state = null;
     return !state.hasError;
   }
 }
+
+/// setActive sırasında güncellenen hizmetin id'si; yalnızca ilgili kartın
+/// anahtarını devre dışı bırakmak için liste tarafından okunur.
+final serviceUpdatingIdProvider = StateProvider<String?>((ref) => null);
 
 final servicesListControllerProvider = AsyncNotifierProvider.autoDispose
     .family<ServicesListController, ServicesListState, BusinessScope>(

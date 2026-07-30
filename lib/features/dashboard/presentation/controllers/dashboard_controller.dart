@@ -76,7 +76,7 @@ class DashboardController
         state = AsyncData(metrics);
       }
     } on NetworkException catch (error, stack) {
-      if (_isDisposed) return;
+      if (_isDisposed || arg.businessId != businessId) return;
       ref
           .read(appLoggerProvider)
           .warn(
@@ -84,9 +84,18 @@ class DashboardController
             stackTrace: stack,
             context: 'DashboardBackgroundRefresh',
           );
+      // Yerel özet gelir kısmını her zaman ₺0 gösterir (bkz. build()); sunucu
+      // yenilemesi çevrimdışı başarısız olursa bu placeholder'ı sessizce kalıcı
+      // gerçek veri gibi bırakmayız. Hatayı yüzeye çıkar (UI "yeniden dene"
+      // kartı gösterir) ama önceki yerel değeri koru (copyWithPrevious) ki
+      // ekran çökmesin.
+      state = AsyncError<DashboardMetrics?>(error, stack).copyWithPrevious(state);
     } catch (error, stack) {
       if (!_isDisposed && arg.businessId == businessId) {
-        state = AsyncError(error, stack);
+        state = AsyncError<DashboardMetrics?>(
+          error,
+          stack,
+        ).copyWithPrevious(state);
       }
     }
   }

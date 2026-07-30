@@ -39,6 +39,8 @@ class _ServicesListPageState extends ConsumerState<ServicesListPage> {
     final listProvider = servicesListControllerProvider(scope);
     final listState = ref.watch(listProvider);
     final formState = ref.watch(serviceFormControllerProvider);
+    // Yalnızca setActive işlemindeki hizmetin anahtarını kilitlemek için.
+    final updatingServiceId = ref.watch(serviceUpdatingIdProvider);
     final canManageCatalog =
         ref.watch(businessCapabilitiesProvider).valueOrNull?.canManageCatalog ??
         false;
@@ -135,7 +137,9 @@ class _ServicesListPageState extends ConsumerState<ServicesListPage> {
                           final service = services[index];
                           return ServiceCard(
                             service: service,
-                            isUpdating: formState.isLoading,
+                            isUpdating:
+                                formState.isLoading &&
+                                updatingServiceId == service.id,
                             onTap: () => context.pushNamed(
                               AppRouteNames.serviceDetail,
                               pathParameters: {'serviceId': service.id},

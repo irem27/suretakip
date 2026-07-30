@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
@@ -108,6 +110,27 @@ void main() {
       expect(repository.updatedService, isNull);
     },
   );
+
+  test(
+    'setActive sırasında serviceUpdatingIdProvider yalnız o id olur, sonra null',
+    () async {
+      final repository = _FakeServicesRepository(services: [_service()])
+        ..toggleGate = Completer<void>();
+      final container = _container(repository);
+      addTearDown(container.dispose);
+
+      final future = container
+          .read(serviceFormControllerProvider.notifier)
+          .setActive('service-1', isActive: false);
+      // İşlem uçarken yalnız ilgili hizmet id'si kilitli olmalı.
+      expect(container.read(serviceUpdatingIdProvider), 'service-1');
+
+      repository.toggleGate!.complete();
+      await future;
+      // Bittiğinde temizlenir → hiçbir kart kilitli kalmaz.
+      expect(container.read(serviceUpdatingIdProvider), isNull);
+    },
+  );
 }
 
 const BusinessScope _scope = (businessId: 'business-1', generation: 0);
@@ -156,6 +179,7 @@ class _FakeServicesRepository implements ServicesRepository {
   Service? updatedService;
   String? toggledId;
   bool? toggledActive;
+  Completer<void>? toggleGate;
 
   @override
   Future<Service> createService(ServiceInput input) async {
@@ -198,6 +222,7 @@ class _FakeServicesRepository implements ServicesRepository {
   }) async {
     toggledId = serviceId;
     toggledActive = isActive;
+    if (toggleGate != null) await toggleGate!.future;
     return services
         .firstWhere((service) => service.id == serviceId)
         .copyWith(

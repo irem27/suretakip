@@ -89,8 +89,10 @@ class _UnusedCustomersRemoteDataSource implements CustomersRemoteDataSource {
       throw UnimplementedError();
 
   @override
-  Future<Map<String, dynamic>> updateCustomer(Map<String, Object?> values) =>
-      throw UnimplementedError();
+  Future<Map<String, dynamic>> updateCustomer(
+    Map<String, Object?> values, {
+    DateTime? expectedUpdatedAt,
+  }) => throw UnimplementedError();
 }
 
 SyncPushResult _applied() => SyncPushResult(

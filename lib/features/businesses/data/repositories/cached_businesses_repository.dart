@@ -44,11 +44,10 @@ class CachedBusinessesRepository implements BusinessesRepository {
       await _cache(() => _local.replaceBusinesses(businesses));
       return businesses;
     } on NetworkException {
-      _logger.warn(
-        'İşletmeler çevrimdışı önbellekten okundu (${cached.length}).',
-        context: 'CachedBusinessesRepository',
-      );
-      return cached;
+      // Önbellek boş + çevrimdışı: boş liste "işletme yok" gibi maskelenirse
+      // router kullanıcıyı yanlışlıkla onboarding'e atar. Hatayı yükselt ki UI
+      // çevrimdışı/yeniden-dene göstersin (getBusiness ile tutarlı).
+      rethrow;
     }
   }
 
@@ -80,11 +79,9 @@ class CachedBusinessesRepository implements BusinessesRepository {
       await _cache(() => _local.replaceMembers(businessId, members));
       return members;
     } on NetworkException {
-      _logger.warn(
-        'Üyeler çevrimdışı önbellekten okundu (${cached.length}).',
-        context: 'CachedBusinessesRepository',
-      );
-      return cached;
+      // Boş önbellek + çevrimdışı: boş üye listesi kullanıcının rolünü/yetkisini
+      // yanlış hesaplatır. Hatayı yükselt (getBusiness ile tutarlı).
+      rethrow;
     }
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/providers/sync_providers.dart';
+import 'package:suretakip/core/errors/domain_exception.dart';
 import 'package:suretakip/core/sync/models/sync_enums.dart';
 import 'package:suretakip/features/customers/data/local/local_customer_mappers.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
@@ -110,7 +111,17 @@ class CustomerFormController extends AsyncNotifier<void> {
   Future<Customer?> create(CustomerInput input) async {
     final scope = ref.read(activeBusinessScopeProvider);
     final member = await ref.read(currentMemberProvider(scope).future);
-    if (member == null) return null;
+    if (member == null) {
+      // Üyelik henüz senkron olmamış olabilir; sessiz null yerine hata durumu
+      // üret ki form kullanıcıya geri bildirim verebilsin.
+      state = AsyncError(
+        const ValidationException(
+          'Üyelik bilgisi henüz hazır değil. Lütfen tekrar deneyin.',
+        ),
+        StackTrace.current,
+      );
+      return null;
+    }
 
     Customer? created;
     state = const AsyncLoading();

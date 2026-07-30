@@ -102,6 +102,38 @@ void main() {
     expect(find.text('Tahsilat kaydedildi.'), findsNothing);
   });
 
+  testWidgets(
+    'başarısız gönderim sonrası aynı tutar yeniden yazılınca retry key korunur',
+    (tester) async {
+      final repository = _FakePaymentsRepository(_partialSummary)
+        ..failNextRecord = true;
+      await _pumpSheet(tester, repository);
+
+      final submit = find.byKey(const Key('payment-submit-button'));
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+      expect(repository.recordCalls, 1);
+
+      // Kullanıcı alana dokunur ama tutar GERÇEKTE değişmez (aynı değer).
+      await tester.enterText(find.byType(TextFormField), '80,00');
+      await tester.pump();
+
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      // İkinci deneme retryPayment üzerinden gitmeli: AYNI idempotency key
+      // yeniden kullanılmalı, yoksa sunucu ilk isteği zaten işlemiş olsa bile
+      // yeni bir key ile çift tahsilat oluşur.
+      expect(repository.recordCalls, 2);
+      expect(repository.idempotencyKeysUsed, hasLength(2));
+      expect(
+        repository.idempotencyKeysUsed[1],
+        repository.idempotencyKeysUsed[0],
+      );
+      expect(find.text('Tahsilat kaydedildi.'), findsOneWidget);
+    },
+  );
+
   testWidgets('staff iptal/iade görmez, owner/admin paneli görür', (
     tester,
   ) async {
@@ -211,7 +243,9 @@ class _FakePaymentsRepository implements PaymentsRepository {
   final SessionPaymentSummary summary;
   var recordCalls = 0;
   var replayed = false;
+  var failNextRecord = false;
   Completer<PaymentMutationResult>? recordCompleter;
+  final idempotencyKeysUsed = <String>[];
 
   PaymentMutationResult mutation() => PaymentMutationResult(
     summary: summary,
@@ -232,6 +266,11 @@ class _FakePaymentsRepository implements PaymentsRepository {
   @override
   Future<PaymentMutationResult> recordSessionPayment(PaymentInput input) {
     recordCalls++;
+    idempotencyKeysUsed.add(input.idempotencyKey);
+    if (failNextRecord) {
+      failNextRecord = false;
+      return Future.error(StateError('ağ hatası'));
+    }
     return recordCompleter?.future ?? Future.value(mutation());
   }
 

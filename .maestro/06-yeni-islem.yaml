@@ -1,0 +1,45 @@
+# Çekirdek akış: yeni işlem (seans) UÇTAN UCA — başlat + tamamla.
+# Dakika-bazlı takibin ana özelliği:
+#   Dashboard → Yeni İşlem Başlat → Misafir müşteri → Hizmet seç →
+#   Süreyi Başlat → aktif seans (İşlem Detayı) → İşlemi Tamamla.
+appId: com.suretakip.app
+tags:
+  - core
+env:
+  MAESTRO_EMAIL: "test@suretakip.com"
+  MAESTRO_PASSWORD: "Test1234!"
+---
+- runFlow: subflows/launch.yaml
+- runFlow: subflows/login.yaml
+
+# 1) Dashboard'dan yeni işlem başlat
+- tapOn: "Yeni İşlem Başlat"
+- extendedWaitUntil:
+    visible: "Müşteri seç"
+    timeout: 15000
+
+# 2) Müşteri: misafir (Semantics label tam metin → .*)
+- tapOn: "Misafir müşteri.*"
+
+# 3) Hizmet seç (Semantics label "Hizmet: <ad>")
+- assertVisible: "Hizmet seç"
+- tapOn: "Hizmet: Standart Hizmet"
+
+# 4) Süreyi başlat → aktif seans açılır
+- tapOn: "Süreyi Başlat"
+- extendedWaitUntil:
+    visible: "İşlem Detayı"
+    timeout: 20000
+- takeScreenshot: aktif-seans-basladi
+
+# 5) İşlemi tamamla (onay diyaloğu)
+- tapOn: "İşlemi Tamamla"
+- extendedWaitUntil:
+    visible: "Onayla ve Tamamla"
+    timeout: 10000
+- tapOn: "Onayla ve Tamamla"
+# Tamamlama sonrası: durum "Tamamlandı" ya da "N dakika" olur, snackbar da çıkar.
+- extendedWaitUntil:
+    visible: "İşlem tamamlandı.*|Tamamlandı|Kesin tutar eşitleme.*"
+    timeout: 20000
+- takeScreenshot: islem-tamamlandi

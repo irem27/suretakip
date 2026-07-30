@@ -47,9 +47,14 @@ void main() {
     expect(result.map((b) => b.id), ['b1']);
   });
 
-  test('önbellek boşken ağ hatası üyeler için boş liste döner', () async {
+  test('önbellek boşken ağ hatası üyeler için yükseltilir', () async {
     remote.throwNetwork = true;
-    expect(await repo.getMembers('b1'), isEmpty);
+    expect(repo.getMembers('b1'), throwsA(isA<NetworkException>()));
+  });
+
+  test('önbellek boşken ağ hatası işletmeler için yükseltilir', () async {
+    remote.throwNetwork = true;
+    expect(repo.getBusinesses(), throwsA(isA<NetworkException>()));
   });
 
   test('ağ dışı hata (yetki) yükseltilir, önbelleğe düşülmez', () async {

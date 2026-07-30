@@ -44,6 +44,12 @@ void main() {
     expect(cached.single.id, 'p1');
   });
 
+  test('önbellek boşken ağ hatasında getProducts hatayı yükseltir', () async {
+    // Boş önbellek + çevrimdışı: boş liste "ürün yok" gibi maskelenmemeli.
+    remote.throwNetwork = true;
+    expect(repo.getProducts(businessId: 'b1'), throwsA(isA<NetworkException>()));
+  });
+
   test('önbellek varsa ürünleri uzak yanıtı beklemeden döndürür', () async {
     await local.replaceProducts('b1', [_product('cached')]);
     remote.productsCompleter = Completer<List<Product>>();

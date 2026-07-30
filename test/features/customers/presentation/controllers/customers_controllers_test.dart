@@ -251,6 +251,7 @@ class _FakeCustomersRepository implements CustomersRepository {
   Future<Customer> setCustomerActive(
     String customerId, {
     required bool isActive,
+    DateTime? expectedUpdatedAt,
   }) async {
     toggledId = customerId;
     toggledActive = isActive;
@@ -276,8 +277,10 @@ class _NoopCustomersRemoteDataSource implements CustomersRemoteDataSource {
       throw UnimplementedError();
 
   @override
-  Future<Map<String, dynamic>> updateCustomer(Map<String, Object?> values) =>
-      throw UnimplementedError();
+  Future<Map<String, dynamic>> updateCustomer(
+    Map<String, Object?> values, {
+    DateTime? expectedUpdatedAt,
+  }) => throw UnimplementedError();
 }
 
 class _AuthRequiredGuard implements SyncSessionGuard {

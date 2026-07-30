@@ -36,11 +36,20 @@ class DashboardRepositoryImpl implements DashboardRepository {
         );
       });
 
+  // null meşrudur (ör. boş SUM toplamı) → 0. Ayrıştırılamayan metin veya
+  // beklenmeyen tip, sessizce 0'a düşürülüp yanlış finansal değer göstermek
+  // yerine hata fırlatır; SupabaseErrorGuard yakalayıp loglar (currency_code
+  // `as String` cast'i ile tutarlı).
   int _int(Object? value) => switch (value) {
+    null => 0,
     final int number => number,
     final num number => number.toInt(),
-    final String text => int.tryParse(text) ?? 0,
-    _ => 0,
+    final String text =>
+      int.tryParse(text) ??
+          (throw FormatException('Sayısal alan ayrıştırılamadı: "$text"')),
+    _ => throw FormatException(
+      'Beklenmeyen sayısal alan tipi: ${value.runtimeType}',
+    ),
   };
 
   Future<T> _guard<T>(Future<T> Function() operation) => SupabaseErrorGuard.run(

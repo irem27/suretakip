@@ -1,0 +1,22 @@
+# Ana sekme navigasyonu: tüm alt bar sekmeleri açılıyor mu.
+# Girişten sonra çalışır. Onboarding tamamlanmış hesap gerekir.
+appId: com.suretakip.app
+tags:
+  - navigation
+env:
+  MAESTRO_EMAIL: "test@suretakip.com"
+  MAESTRO_PASSWORD: "Test1234!"
+---
+- runFlow: subflows/launch.yaml
+- runFlow: subflows/login.yaml
+- tapOn: "İşlemler"
+- assertVisible: "İşlemler"
+- tapOn: "Müşteriler"
+- assertVisible: "Müşteriler"
+- tapOn: "Raporlar"
+- assertVisible: "Raporlar"
+- tapOn: "Tanımlar"
+- assertVisible: "Tanımlar"
+- tapOn: "Ana Sayfa"
+- assertVisible: "Ana Sayfa"
+- takeScreenshot: navigasyon-son

@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/providers/sync_providers.dart';
 import 'package:suretakip/core/constants/app_constants.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
+import 'package:suretakip/core/errors/domain_exception.dart';
 import 'package:suretakip/core/utils/business_date_ranges.dart';
 import 'package:suretakip/features/customers/data/local/local_customer_mappers.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
@@ -67,6 +69,9 @@ class HistoryController
   Future<void>? _refreshInFlight;
   var _isDisposed = false;
   var _didScheduleInitialRefresh = false;
+  var _filterVersion = 0;
+  var _refreshPending = false;
+  var _surfaceRefreshErrors = false;
 
   @override
   Future<HistoryState> build(BusinessScope scope) {
@@ -81,7 +86,7 @@ class HistoryController
     return _loadLocal();
   }
 
-  Future<void> refresh() => _refreshFromServer();
+  Future<void> refresh() => _refreshFromServer(surfaceErrors: true);
 
   Future<void> setDates(DateTime firstDate, DateTime lastDate) async {
     _firstDate = firstDate;
@@ -106,6 +111,9 @@ class HistoryController
   }
 
   Future<void> _reload() async {
+    // Aktif/uçan sunucu yenilemesi artık güncel olmayan bir filtreye ait;
+    // versiyonu ilerlet ki sonucu uygularken tespit edip atabilelim.
+    _filterVersion++;
     state = const AsyncLoading<HistoryState>().copyWithPrevious(state);
     state = await AsyncValue.guard(_loadLocal);
     _scheduleServerRefresh();
@@ -168,25 +176,61 @@ class HistoryController
     unawaited(_refreshFromServer());
   }
 
-  Future<void> _refreshFromServer() {
-    return _refreshInFlight ??= _runServerRefresh().whenComplete(
-      () => _refreshInFlight = null,
-    );
+  Future<void> _refreshFromServer({bool surfaceErrors = false}) {
+    if (surfaceErrors) _surfaceRefreshErrors = true;
+    final inFlight = _refreshInFlight;
+    if (inFlight != null) {
+      // Filtre değişmiş olabilir; mevcut istek bitince güncel filtreyle
+      // yeniden dene (eski sonucun yeni state'i ezmesini _runServerRefresh
+      // içindeki filtre-versiyon kontrolü zaten engeller).
+      _refreshPending = true;
+      return inFlight;
+    }
+    final future = _runServerRefresh();
+    _refreshInFlight = future.whenComplete(() {
+      _refreshInFlight = null;
+      _surfaceRefreshErrors = false;
+      if (_refreshPending) {
+        _refreshPending = false;
+        _scheduleServerRefresh();
+      }
+    });
+    return _refreshInFlight!;
   }
 
   Future<void> _runServerRefresh() async {
     if (_isDisposed) return;
+    final requestedFilterVersion = _filterVersion;
     try {
       final remote = await _loadRemote();
-      if (!_isDisposed) state = AsyncData(remote);
+      if (_isDisposed) return;
+      if (requestedFilterVersion != _filterVersion) {
+        // Bu istek uçarken filtre değişti; sonuç artık geçerli değil.
+        // Uygulama yerine güncel filtre için yeniden yenileme tetiklenir.
+        _refreshPending = true;
+        return;
+      }
+      state = AsyncData(remote);
     } catch (error, stack) {
-      // Ağ/sunucu yenilemesi yerel geçmişi hata ekranına çevirmemeli.
+      // Ağ/sunucu yenilemesi yerel geçmişi varsayılan olarak hata ekranına
+      // çevirmemeli, ancak kullanıcı elle yenile'ye bastığında ağ-dışı
+      // (ör. kimlik doğrulama/5xx) hatalar sessizce yutulmamalı.
       if (_isDisposed) return;
       ref
           .read(appLoggerProvider)
           .warn(error, stackTrace: stack, context: 'HistoryBackgroundRefresh');
+      if (_surfaceRefreshErrors && !_isNetworkFailure(error)) {
+        state = AsyncError<HistoryState>(error, stack).copyWithPrevious(state);
+        rethrow;
+      }
     }
   }
+
+  bool _isNetworkFailure(Object error) =>
+      error is NetworkException ||
+      error is SocketException ||
+      error is TimeoutException ||
+      error is HandshakeException;
 
   Future<HistoryState> _loadRemote() async {
     final businessId = _scope.businessId;

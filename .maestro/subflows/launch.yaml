@@ -1,0 +1,9 @@
+# Alt-akış: temiz başlat. clearState ile önceki oturumu sıfırlar.
+appId: com.suretakip.app
+---
+- clearState
+- launchApp
+- extendedWaitUntil:
+    visible:
+      text: ".*"
+    timeout: 20000

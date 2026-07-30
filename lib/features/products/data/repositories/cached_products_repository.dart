@@ -50,7 +50,10 @@ class CachedProductsRepository implements ProductsRepository {
           ? all
           : all.where((p) => p.isActive).toList(growable: false);
     } on NetworkException {
-      return cached;
+      // Önbellek boş + çevrimdışı: boş liste "ürün yok" gibi maskelenmemeli;
+      // hatayı yükselt ki UI çevrimdışı/yeniden-dene göstersin (getProduct ile
+      // tutarlı).
+      rethrow;
     }
   }
 

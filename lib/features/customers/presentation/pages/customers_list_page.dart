@@ -182,7 +182,7 @@ class _CustomerCard extends StatelessWidget {
               Row(
                 children: [
                   CircleAvatar(
-                    child: Text(customer.name.characters.first.toUpperCase()),
+                    child: Text(customerAvatarInitial(customer.name)),
                   ),
                   const SizedBox(width: 14),
                   Expanded(

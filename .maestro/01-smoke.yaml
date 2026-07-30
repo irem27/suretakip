@@ -1,0 +1,10 @@
+# Duman testi: uygulama açılıyor mu, login ekranı geliyor mu.
+appId: com.suretakip.app
+tags:
+  - smoke
+---
+- runFlow: subflows/launch.yaml
+- assertVisible: "Giriş Yap"
+- assertVisible: "E-posta"
+- assertVisible: "Şifre"
+- takeScreenshot: smoke-login

@@ -1,9 +1,24 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:suretakip/core/errors/domain_exception.dart';
 import 'package:suretakip/features/sessions/data/datasources/sessions_remote_data_source.dart';
 import 'package:suretakip/features/sessions/data/repositories/sessions_repository_impl.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_history_filter.dart';
 
 void main() {
+  test('zorunlu bir alan null geldiğinde ham TypeError yerine '
+      'DatabaseException fırlatır', () async {
+    final malformedRow = Map<String, dynamic>.from(_sessionRow)
+      ..['service_name_snapshot'] = null;
+    final dataSource = _FakeSessionsDataSource()
+      ..sessionRowOverride = malformedRow;
+    final repository = SessionsRepositoryImpl(dataSource);
+
+    expect(
+      () => repository.getSessions(businessId: 'business-1'),
+      throwsA(isA<DatabaseException>()),
+    );
+  });
+
   test('seans satırını snapshot alanlarıyla domain modeline eşler', () async {
     final repository = SessionsRepositoryImpl(_FakeSessionsDataSource());
 
@@ -42,12 +57,25 @@ void main() {
 
 class _FakeSessionsDataSource implements SessionsRemoteDataSource {
   String? notes;
+  Map<String, dynamic>? sessionRowOverride;
+
+  Map<String, dynamic> get _row => sessionRowOverride ?? _sessionRow;
 
   @override
   Future<List<Map<String, dynamic>>> getSessions({
     required String businessId,
     String? customerId,
-  }) async => [_sessionRow];
+  }) async => [_row];
+
+  @override
+  Future<List<Map<String, dynamic>>> getOpenSessions(String businessId) async =>
+      [_sessionRow];
+
+  @override
+  Future<List<Map<String, dynamic>>> getSessionsByIds(
+    String businessId,
+    List<String> sessionIds,
+  ) async => sessionIds.contains(_sessionRow['id']) ? [_sessionRow] : [];
 
   @override
   Future<Map<String, dynamic>> getSession(String sessionId) async =>

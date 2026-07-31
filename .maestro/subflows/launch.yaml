@@ -1,0 +1,22 @@
+# Alt-akış: temiz başlat. clearState ile önceki oturumu sıfırlar.
+#
+# NOT: iOS'ta Supabase oturumu Keychain'de tutulur ve clearState (hatta
+# uninstall) bunu silmez → app giriş yapılı açılır. Bu yüzden Dashboard
+# görünürse önce çıkış yapıp login ekranına döneriz. Android'de clearState
+# oturumu temizlediğinden bu dal `when` ile atlanır.
+appId: com.suretakip.app
+---
+- clearState
+- launchApp
+- extendedWaitUntil:
+    visible:
+      text: ".*"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Çıkış yap"
+    commands:
+      - tapOn: "Çıkış yap"
+      - extendedWaitUntil:
+          visible: "Giriş Yap"
+          timeout: 15000

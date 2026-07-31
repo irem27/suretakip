@@ -78,7 +78,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(actions.sessionId, 'session-1');
-    expect(actions.productId, 'product-1');
+    expect(actions.product?.id, 'product-1');
     expect(actions.quantity, 2);
     expect(find.text('Ürün ekle'), findsNothing);
   });
@@ -202,7 +202,7 @@ class _SessionActionsController extends SessionActionsController {
 
   final Object? error;
   String? sessionId;
-  String? productId;
+  Product? product;
   int? quantity;
 
   @override
@@ -211,13 +211,13 @@ class _SessionActionsController extends SessionActionsController {
   @override
   Future<bool> addProduct({
     required String sessionId,
-    required String productId,
+    required Product product,
     required int quantity,
     int discountMinor = 0,
     int taxMinor = 0,
   }) async {
     this.sessionId = sessionId;
-    this.productId = productId;
+    this.product = product;
     this.quantity = quantity;
     if (error == null) return true;
     state = AsyncError(error!, StackTrace.empty);

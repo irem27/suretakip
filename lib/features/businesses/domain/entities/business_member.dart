@@ -4,7 +4,7 @@ import 'package:suretakip/core/domain/domain_enums.dart';
 part 'business_member.freezed.dart';
 
 @freezed
-class BusinessMember with _$BusinessMember {
+abstract class BusinessMember with _$BusinessMember {
   const factory BusinessMember({
     required String id,
     required String businessId,

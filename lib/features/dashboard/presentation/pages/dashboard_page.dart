@@ -76,7 +76,6 @@ class DashboardPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ana Sayfa'),
         actions: [
           IconButton(
             onPressed: signOutState.isLoading
@@ -97,21 +96,8 @@ class DashboardPage extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            Text(
-              'Hoş geldiniz',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Aktif işlemleri, gün sonu gelirini ve hızlı aksiyonları buradan yöneteceksin.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
             if (businesses.length > 1 && activeBusiness != null) ...[
-              const SizedBox(height: 20),
+              const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 key: ValueKey('business-switcher-${activeBusiness.id}'),
                 initialValue: activeBusiness.id,

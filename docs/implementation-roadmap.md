@@ -1,5 +1,10 @@
 # SüreTakip — İnceleme Sonrası Uygulama Yol Haritası
 
+> **Tarihsel belge:** Bu dosya 16 Temmuz 2026'daki erken iskelet durumunu
+> kaydeder; "henüz yok" listeleri bugünün repo durumunu temsil etmez. Güncel
+> mimari için [`architecture.md`](architecture.md), offline uygulama ve faz durumu
+> için [`offline-first-contract.md`](offline-first-contract.md) kullanılmalıdır.
+
 > Hazırlanma tarihi: 16 Temmuz 2026  
 > İncelenen dal/commit: `main` / `f725ab6`  
 > Kaynaklar: `docs/architecture.md`, `docs/project-phases.md`, mevcut Flutter kodu ve Stitch tasarım çıktıları

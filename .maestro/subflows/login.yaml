@@ -1,0 +1,26 @@
+# Alt-akış: giriş yap. Diğer flow'lar runFlow ile çağırır.
+# Gerekli env: MAESTRO_EMAIL, MAESTRO_PASSWORD
+appId: com.suretakip.app
+---
+- assertVisible: "Giriş Yap"
+- tapOn: "E-posta"
+- inputText: ${MAESTRO_EMAIL}
+- tapOn: "Şifre"
+- inputText: ${MAESTRO_PASSWORD}
+- tapOn:
+    text: "Giriş Yap"
+    index: 0
+# Giriş sonrası: yeni hesap İşletme Kurulumu'na düşer → onboarding'i doldur.
+# Mevcut hesap doğrudan Ana Sayfa'ya gider → onboarding atlanır.
+- extendedWaitUntil:
+    visible:
+      text: "Ana Sayfa|İşletme Kurulumu"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "İşletme Kurulumu"
+    file: onboarding.yaml
+- extendedWaitUntil:
+    visible:
+      text: "Ana Sayfa"
+    timeout: 20000

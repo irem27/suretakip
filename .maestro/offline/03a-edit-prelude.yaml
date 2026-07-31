@@ -1,0 +1,27 @@
+# Offline EDIT — bölüm 1/2 (ONLINE): yeni müşteri oluştur, detayında bırak.
+# Liste selector kırılganlığını önlemek için: kayıt sonrası app doğrudan
+# müşteri DETAYINA gider (pushReplacement). Sonra script ağı keser, 03b toggle.
+appId: com.suretakip.app
+env:
+  MAESTRO_EMAIL: "test@suretakip.com"
+  MAESTRO_PASSWORD: "Test1234!"
+  EDIT_CUSTOMER: "Offline Edit Test"
+---
+- runFlow: ../subflows/launch.yaml
+- runFlow: ../subflows/login.yaml
+- tapOn: "Müşteriler"
+- assertVisible: "Müşteriler"
+- tapOn: "Yeni Müşteri"
+- extendedWaitUntil:
+    visible: "Ad soyad"
+    timeout: 10000
+- tapOn: "Ad soyad"
+- inputText: ${EDIT_CUSTOMER}
+- tapOn: "Yeni Müşteri"
+- tapOn: "Müşteriyi Kaydet"
+- extendedWaitUntil:
+    visible: "Müşteri Detayı"
+    timeout: 15000
+- assertVisible:
+    text: "Pasife Al|Aktifleştir"
+- takeScreenshot: offline-edit-detail-online

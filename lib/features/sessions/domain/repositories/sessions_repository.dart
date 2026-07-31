@@ -9,6 +9,15 @@ abstract interface class SessionsRepository {
     String? customerId,
   });
 
+  /// Senkronizasyon için yalnız aktif/duraklatılmış seansları getirir.
+  Future<List<Session>> getOpenSessions({required String businessId});
+
+  /// Yerelde açık kalmış seansların güncel terminal durumunu toplu doğrular.
+  Future<List<Session>> getSessionsByIds({
+    required String businessId,
+    required List<String> sessionIds,
+  });
+
   Future<Session> getSession(String sessionId);
 
   Future<List<Session>> getSessionHistory({

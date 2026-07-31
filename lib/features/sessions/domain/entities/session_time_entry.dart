@@ -4,7 +4,7 @@ import 'package:suretakip/core/domain/domain_enums.dart';
 part 'session_time_entry.freezed.dart';
 
 @freezed
-class SessionTimeEntry with _$SessionTimeEntry {
+abstract class SessionTimeEntry with _$SessionTimeEntry {
   const factory SessionTimeEntry({
     required String id,
     required String businessId,

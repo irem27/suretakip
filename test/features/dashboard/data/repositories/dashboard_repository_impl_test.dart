@@ -14,9 +14,10 @@ void main() {
     expect(metrics.todayRevenue.currencyCode, 'TRY');
   });
 
-  test('eksik sayısal metrikler güvenli sıfıra eşlenir', () async {
+  test('null sayısal metrikler (boş toplam) güvenli sıfıra eşlenir', () async {
+    // null meşrudur (ör. hiç seans yokken SUM null döner) → 0.
     const repository = DashboardRepositoryImpl(
-      _FakeDashboardDataSource(safeZero: true),
+      _FakeDashboardDataSource(nullNumerics: true),
     );
 
     final metrics = await repository.getMetrics(businessId: 'business-1');
@@ -25,20 +26,38 @@ void main() {
     expect(metrics.todayCompletedCount, 0);
     expect(metrics.todayRevenue.minorUnits, 0);
   });
+
+  test('ayrıştırılamayan sayısal alan sessizce 0 yerine hata fırlatır', () {
+    // Bozuk/ayrıştırılamayan değer sessizce 0 gösterilip yanlış finansal
+    // değer üretmemeli; SupabaseErrorGuard'ın yakalayabilmesi için throw eder.
+    const repository = DashboardRepositoryImpl(
+      _FakeDashboardDataSource(invalidNumeric: true),
+    );
+
+    expect(repository.getMetrics(businessId: 'business-1'), throwsA(anything));
+  });
 }
 
 class _FakeDashboardDataSource implements DashboardRemoteDataSource {
-  const _FakeDashboardDataSource({this.safeZero = false});
+  const _FakeDashboardDataSource({
+    this.nullNumerics = false,
+    this.invalidNumeric = false,
+  });
 
-  final bool safeZero;
+  final bool nullNumerics;
+  final bool invalidNumeric;
 
   @override
   Future<List<Map<String, dynamic>>> getMetrics(String businessId) async => [
     {
       'server_now': '2026-07-18T10:00:00Z',
-      'active_session_count': safeZero ? null : '3',
-      'today_completed_count': safeZero ? 'geçersiz' : 4,
-      'today_revenue_minor': safeZero ? null : 12500,
+      'active_session_count': nullNumerics ? null : '3',
+      'today_completed_count': invalidNumeric
+          ? 'geçersiz'
+          : nullNumerics
+          ? null
+          : 4,
+      'today_revenue_minor': nullNumerics ? null : 12500,
       'currency_code': 'TRY',
     },
   ];

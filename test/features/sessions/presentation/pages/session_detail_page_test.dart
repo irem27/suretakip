@@ -1,21 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
 import 'package:suretakip/core/errors/domain_exception.dart';
-import 'package:suretakip/core/value_objects/money.dart';
-import 'package:suretakip/features/payments/domain/entities/payment.dart';
-import 'package:suretakip/features/payments/domain/entities/payment_mutation_result.dart';
-import 'package:suretakip/features/payments/domain/entities/payment_input.dart';
-import 'package:suretakip/features/payments/domain/entities/refund_input.dart';
-import 'package:suretakip/features/payments/domain/entities/session_payment_summary.dart';
-import 'package:suretakip/features/payments/domain/entities/session_payment_status_summary.dart';
-import 'package:suretakip/features/payments/domain/repositories/payments_repository.dart';
-import 'package:suretakip/features/payments/presentation/controllers/payments_controller.dart';
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_time_entry.dart';
-import 'package:suretakip/features/sessions/domain/repositories/sessions_repository.dart';
 import 'package:suretakip/features/sessions/presentation/controllers/sessions_controllers.dart';
 import 'package:suretakip/features/sessions/presentation/pages/session_detail_page.dart';
 
@@ -25,8 +14,7 @@ void main() {
   testWidgets('ağ hatası bağlantı mesajı, ikonu ve yeniden denemeyi gösterir', (
     tester,
   ) async {
-    const message =
-        'İnternet bağlantısı yok gibi görünüyor. Bağlantınızı kontrol edip tekrar deneyin.';
+    const message = 'Çevrimdışı moddasınız.';
     var loadCount = 0;
 
     await tester.pumpWidget(
@@ -47,7 +35,7 @@ void main() {
     expect(find.text(message), findsOneWidget);
     expect(find.byIcon(Icons.wifi_off_rounded), findsOneWidget);
     expect(find.byIcon(Icons.error_outline_rounded), findsNothing);
-    final retryButton = find.widgetWithText(OutlinedButton, 'Tekrar Dene');
+    final retryButton = find.widgetWithText(OutlinedButton, 'Yenile');
     expect(retryButton, findsOneWidget);
 
     await tester.tap(retryButton);
@@ -96,6 +84,20 @@ void main() {
     },
   );
 
+  testWidgets('offline tamamlanan işlem eşitleme bekliyor olarak gösterilir', (
+    tester,
+  ) async {
+    await _pump(tester, _completedWithoutTotalsState());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tamamlandı'), findsWidgets);
+    expect(find.text('Kesin tutar eşitleme bekliyor'), findsOneWidget);
+    expect(find.text('Taslak işlem'), findsNothing);
+    expect(find.text('Genel Toplam'), findsNothing);
+    expect(find.text('Ödeme'), findsNothing);
+    expect(find.text('Tahsil Et'), findsNothing);
+  });
+
   testWidgets('açıkken iptal edilen işlemde fiyat kartı gösterilmez', (
     tester,
   ) async {
@@ -107,6 +109,19 @@ void main() {
     // Durum rozeti de aynı metni taşıyor; asıl iddia fiyat kartının yokluğu.
     expect(find.text('İptal edildi'), findsWidgets);
     expect(find.text('Genel Toplam'), findsNothing);
+  });
+
+  testWidgets('taslak işlem iptal edildi yerine taslak durumunu gösterir', (
+    tester,
+  ) async {
+    // draft: henüz başlatılmamış seans; yanlışlıkla "İptal edildi"
+    // gösterilmemeli (regresyon: SessionStatus.draft ele alınmıyordu).
+    await _pump(tester, _draftState());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Taslak işlem'), findsOneWidget);
+    expect(find.text('Henüz başlatılmadı'), findsOneWidget);
+    expect(find.text('İptal edildi'), findsNothing);
   });
 
   testWidgets('tamamlanıp iptal edilen işlem kesin tutarlarını korur', (
@@ -142,10 +157,10 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('tamamlama başarısından sonra dashboard yerine tahsilat açılır', (
+  testWidgets('tamamlama başarısı çevrimiçi tahsilatı otomatik açmaz', (
     tester,
   ) async {
-    final sessions = _CompletingSessionsRepository();
+    final actions = _CompletingSessionActionsController();
     tester.view.physicalSize = const Size(1200, 3200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -156,10 +171,7 @@ void main() {
           sessionDetailProvider(
             'session-1',
           ).overrideWith((ref) => _activeState()),
-          sessionsRepositoryProvider.overrideWithValue(sessions),
-          paymentsRepositoryProvider.overrideWithValue(
-            _CheckoutPaymentsRepository(),
-          ),
+          sessionActionsControllerProvider.overrideWith(() => actions),
         ],
         child: const MaterialApp(
           home: SessionDetailPage(sessionId: 'session-1'),
@@ -173,9 +185,15 @@ void main() {
     await tester.tap(find.text('Onayla ve Tamamla'));
     await tester.pumpAndSettle();
 
-    expect(sessions.completeCalls, 1);
-    expect(find.text('Tahsilat'), findsOneWidget);
-    expect(find.byTooltip('Ödeme yapmadan kapat'), findsOneWidget);
+    expect(actions.completeCalls, 1);
+    expect(find.text('Tahsilat'), findsNothing);
+    expect(find.byTooltip('Ödeme yapmadan kapat'), findsNothing);
+    expect(
+      find.text(
+        'İşlem tamamlandı. Kesin tutar eşitlenince tahsilat yapabilirsiniz.',
+      ),
+      findsOneWidget,
+    );
   });
 }
 
@@ -246,6 +264,39 @@ SessionDetailState _cancelledWithoutTotalsState() => SessionDetailState(
   clockAnchor: Duration.zero,
 );
 
+SessionDetailState _completedWithoutTotalsState() => SessionDetailState(
+  session: _session(
+    status: SessionStatus.completed,
+    endedAt: DateTime.utc(2026, 7, 17, 12, 20),
+  ),
+  customerName: 'Ali',
+  items: const [],
+  timeEntries: [
+    SessionTimeEntry(
+      id: 'entry-1',
+      businessId: 'business-1',
+      sessionId: 'session-1',
+      entryType: TimeEntryType.active,
+      startedAt: DateTime.utc(2026, 7, 17, 12),
+      endedAt: DateTime.utc(2026, 7, 17, 12, 20),
+      createdAt: DateTime.utc(2026, 7, 17, 12),
+    ),
+  ],
+  serverAnchor: DateTime.utc(2026, 7, 17, 13),
+  clock: FakeMonotonicClock(),
+  clockAnchor: Duration.zero,
+);
+
+SessionDetailState _draftState() => SessionDetailState(
+  session: _session(status: SessionStatus.draft),
+  customerName: 'Ali',
+  items: const [],
+  timeEntries: const [],
+  serverAnchor: DateTime.utc(2026, 7, 17, 12),
+  clock: FakeMonotonicClock(),
+  clockAnchor: Duration.zero,
+);
+
 SessionDetailState _activeState() => SessionDetailState(
   session: _session(status: SessionStatus.active),
   customerName: null,
@@ -299,62 +350,19 @@ Session _session({
   updatedAt: DateTime.utc(2026, 7, 17, 12),
 );
 
-class _CompletingSessionsRepository implements SessionsRepository {
+class _CompletingSessionActionsController extends SessionActionsController {
   var completeCalls = 0;
 
   @override
-  Future<String> completeSession({
+  Future<void> build() async {}
+
+  @override
+  Future<bool> complete({
     required String sessionId,
     int discountMinor = 0,
     int taxMinor = 0,
   }) async {
     completeCalls++;
-    return sessionId;
+    return true;
   }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
-
-class _CheckoutPaymentsRepository implements PaymentsRepository {
-  @override
-  Future<SessionPaymentSummary> getSessionPaymentSummary(
-    String sessionId,
-  ) async => _checkoutSummary;
-
-  @override
-  Future<List<SessionPaymentStatusSummary>> getSessionsPaymentStatus(
-    List<String> sessionIds,
-  ) async => const [];
-
-  @override
-  Future<PaymentMutationResult> recordSessionPayment(
-    PaymentInput input,
-  ) async => PaymentMutationResult(
-    summary: _checkoutSummary,
-    paymentId: 'payment-1',
-    replayed: false,
-  );
-
-  @override
-  Future<PaymentMutationResult> refundPayment(RefundInput input) async =>
-      throw UnimplementedError();
-
-  @override
-  Future<PaymentMutationResult> voidPayment({
-    required String paymentId,
-    required String reason,
-  }) async => throw UnimplementedError();
-}
-
-final _checkoutSummary = SessionPaymentSummary(
-  sessionId: 'session-1',
-  sessionTotal: Money(minorUnits: 10500, currencyCode: 'TRY'),
-  collected: Money.zero('TRY'),
-  refunded: Money.zero('TRY'),
-  netPaid: Money.zero('TRY'),
-  remaining: Money(minorUnits: 10500, currencyCode: 'TRY'),
-  paymentStatus: SessionPaymentStatus.unpaid,
-  currencyCode: 'TRY',
-  payments: const [],
-);

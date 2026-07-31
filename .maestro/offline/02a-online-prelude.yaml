@@ -1,0 +1,13 @@
+# Offline SENARYO B — bölüm 1/2: ONLINE başla, Müşteriler listesine git.
+# Uygulamayı çalışır ve giriş yapılı bırakır (clearState + login). Ardından
+# harici script ağı keser ve 02b-offline-add.yaml çalıştırılır.
+appId: com.suretakip.app
+env:
+  MAESTRO_EMAIL: "test@suretakip.com"
+  MAESTRO_PASSWORD: "Test1234!"
+---
+- runFlow: ../subflows/launch.yaml
+- runFlow: ../subflows/login.yaml
+- tapOn: "Müşteriler"
+- assertVisible: "Müşteriler"
+- takeScreenshot: offline-warm-online

@@ -28,11 +28,20 @@ class CustomersRemoteDataSource {
           .select()
           .single();
 
-  Future<Map<String, dynamic>> updateCustomer(Map<String, Object?> values) =>
-      _client
-          .from(AppConstants.customersTable)
-          .update(values)
-          .eq('id', values['id']! as String)
-          .select()
-          .single();
+  /// [expectedUpdatedAt] verilirse iyimser eşzamanlılık denetimi için sorguya
+  /// eklenir: kayıt bu andan sonra değiştiyse eşleşen satır kalmaz ve
+  /// `.single()` "kayıt bulunamadı" (PGRST116) hatası fırlatır.
+  Future<Map<String, dynamic>> updateCustomer(
+    Map<String, Object?> values, {
+    DateTime? expectedUpdatedAt,
+  }) {
+    var query = _client
+        .from(AppConstants.customersTable)
+        .update(values)
+        .eq('id', values['id']! as String);
+    if (expectedUpdatedAt != null) {
+      query = query.eq('updated_at', expectedUpdatedAt.toIso8601String());
+    }
+    return query.select().single();
+  }
 }

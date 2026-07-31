@@ -1,0 +1,20 @@
+# Negatif akış: yanlış şifre → hata mesajı, ana sayfaya GİRMEMELİ.
+appId: com.suretakip.app
+tags:
+  - auth
+---
+- runFlow: subflows/launch.yaml
+- assertVisible: "Giriş Yap"
+- tapOn: "E-posta"
+- inputText: "yanlis@suretakip.com"
+- tapOn: "Şifre"
+- inputText: "hataliSifre"
+- tapOn:
+    text: "Giriş Yap"
+    index: 0
+- extendedWaitUntil:
+    visible:
+      text: "E-posta veya şifre hatalı.*"
+    timeout: 10000
+- assertNotVisible: "Ana Sayfa"
+- takeScreenshot: login-hata

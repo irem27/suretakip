@@ -1,0 +1,38 @@
+# Offline SESSION — çevrimdışı seans başlat + tamamla (çekirdek özellik).
+# launchApp/clearState YOK — çalışan (Ana Sayfa) oturumu sürdürür. Ağ kesikken
+# hizmet önbellekten seçilir, seans yerel başlatılır/tamamlanır (offline-first);
+# bağlantı gelince sunucuya senkronize olur.
+appId: com.suretakip.app
+---
+- assertVisible: "Ana Sayfa"
+- tapOn: "Yeni İşlem Başlat"
+- extendedWaitUntil:
+    visible: "Müşteri seç"
+    timeout: 15000
+- tapOn: "Misafir müşteri.*"
+- scrollUntilVisible:
+    element:
+      text: "Hizmet: Standart Hizmet"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Hizmet: Standart Hizmet"
+- scrollUntilVisible:
+    element:
+      text: "Süreyi Başlat"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Süreyi Başlat"
+- extendedWaitUntil:
+    visible: "İşlem Detayı"
+    timeout: 20000
+- takeScreenshot: offline-session-started
+# Çevrimdışı tamamla
+- tapOn: "İşlemi Tamamla"
+- extendedWaitUntil:
+    visible: "Onayla ve Tamamla"
+    timeout: 10000
+- tapOn: "Onayla ve Tamamla"
+- extendedWaitUntil:
+    visible: "İşlem tamamlandı.*|Tamamlandı|Kesin tutar eşitleme.*"
+    timeout: 20000
+- takeScreenshot: offline-session-completed

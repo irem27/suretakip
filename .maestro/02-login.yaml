@@ -1,0 +1,12 @@
+# Giriş akışı: geçerli kimlikle login, ana sayfaya ulaşma.
+appId: com.suretakip.app
+tags:
+  - auth
+env:
+  MAESTRO_EMAIL: "test@suretakip.com"
+  MAESTRO_PASSWORD: "Test1234!"
+---
+- runFlow: subflows/launch.yaml
+- runFlow: subflows/login.yaml
+- assertVisible: "Ana Sayfa"
+- takeScreenshot: login-dashboard

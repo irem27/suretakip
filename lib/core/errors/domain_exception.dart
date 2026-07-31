@@ -11,6 +11,8 @@ sealed class DomainException implements Exception {
 
 final class NetworkException extends DomainException {
   const NetworkException(super.message, {super.code, super.cause});
+
+  static const offlineMessage = 'Çevrimdışı moddasınız.';
 }
 
 final class AuthenticationException extends DomainException {

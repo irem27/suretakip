@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
@@ -85,6 +87,25 @@ void main() {
     expect(repository.toggledActive, isFalse);
     expect(repository.updatedProduct, isNull);
   });
+
+  test(
+    'setActive sırasında productUpdatingIdProvider yalnız o id olur, sonra null',
+    () async {
+      final repository = _FakeProductsRepository(products: [_product()])
+        ..toggleGate = Completer<void>();
+      final container = _container(repository);
+      addTearDown(container.dispose);
+
+      final future = container
+          .read(productFormControllerProvider.notifier)
+          .setActive('product-1', isActive: false);
+      expect(container.read(productUpdatingIdProvider), 'product-1');
+
+      repository.toggleGate!.complete();
+      await future;
+      expect(container.read(productUpdatingIdProvider), isNull);
+    },
+  );
 }
 
 const BusinessScope _scope = (businessId: 'business-1', generation: 0);
@@ -134,6 +155,7 @@ class _FakeProductsRepository implements ProductsRepository {
   Product? updatedProduct;
   String? toggledId;
   bool? toggledActive;
+  Completer<void>? toggleGate;
 
   @override
   Future<Product> createProduct(ProductInput input) async {
@@ -177,6 +199,7 @@ class _FakeProductsRepository implements ProductsRepository {
   }) async {
     toggledId = productId;
     toggledActive = isActive;
+    if (toggleGate != null) await toggleGate!.future;
     return products
         .firstWhere((product) => product.id == productId)
         .copyWith(isActive: isActive);

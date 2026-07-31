@@ -1,0 +1,35 @@
+# Kayıt akışı: yeni hesap formu doğrulaması.
+# Not: Benzersiz e-posta gerektiği için gerçek kayıt yerine
+#      form + validasyon (şifre eşleşmemesi) kontrol edilir.
+appId: com.suretakip.app
+tags:
+  - auth
+---
+- runFlow: subflows/launch.yaml
+- tapOn: "Hesabınız yok mu? Kayıt olun"
+# "Kayıt Ol" iOS'ta listede aşağıda/klavye altında olabilir → görünür olana kaydır
+- scrollUntilVisible:
+    element:
+      text: "Kayıt Ol"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "E-posta"
+- inputText: "yeni@suretakip.com"
+- tapOn: "Şifre"
+- inputText: "Test1234!"
+- tapOn: "Şifre tekrarı"
+- inputText: "Baska9999!"
+- scrollUntilVisible:
+    element:
+      text: "Kayıt Ol"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    text: "Kayıt Ol"
+    index: 0
+# Eşleşmeyen şifre → hata beklenir
+- extendedWaitUntil:
+    visible:
+      text: "Şifreler eşleşmiyor."
+    timeout: 8000
+- takeScreenshot: kayit-validasyon

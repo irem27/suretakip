@@ -1,35 +1,95 @@
+import 'dart:async';
+
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/core/database/app_database.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
 import 'package:suretakip/core/value_objects/money.dart';
 import 'package:suretakip/features/businesses/domain/entities/business.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
 import 'package:suretakip/features/customers/domain/repositories/customers_repository.dart';
+import 'package:suretakip/features/history/presentation/controllers/history_controller.dart';
 import 'package:suretakip/features/history/presentation/pages/history_page.dart';
 import 'package:suretakip/features/payments/domain/entities/payment.dart';
 import 'package:suretakip/features/payments/domain/entities/session_payment_status_summary.dart';
 import 'package:suretakip/features/payments/domain/repositories/payments_repository.dart';
-import 'package:suretakip/features/payments/presentation/controllers/payments_controller.dart';
 import 'package:suretakip/features/payments/presentation/widgets/payment_status_badge.dart';
 import 'package:suretakip/features/services/domain/entities/service.dart';
 import 'package:suretakip/features/services/domain/repositories/services_repository.dart';
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
 import 'package:suretakip/features/sessions/domain/entities/session_history_filter.dart';
 import 'package:suretakip/features/sessions/domain/repositories/sessions_repository.dart';
+import 'package:suretakip/features/sessions/data/local/sessions_local_data_source.dart';
 
 void main() {
+  test('geçmiş uzak sunucuyu beklemeden yerel işlemi gösterir', () async {
+    final db = AppDatabase.forExecutor(NativeDatabase.memory());
+    addTearDown(db.close);
+    final local = SessionsLocalDataSource(db);
+    await local.startSession(
+      StartSessionLocally(
+        sessionId: 'local-history',
+        timeEntryId: 'entry-local',
+        businessId: 'business-1',
+        serviceId: 'service-1',
+        openedByMemberId: 'member-1',
+        serviceName: 'Yerel Bilardo',
+        pricePerMinuteMinor: 100,
+        roundingIntervalMinutes: 1,
+        minimumChargeMinutes: 0,
+        currencyCode: 'TRY',
+        startedAt: DateTime.now().toUtc().subtract(const Duration(hours: 1)),
+        startedOffline: true,
+      ),
+    );
+    await local.reconcileTerminalState(
+      sessionId: 'local-history',
+      status: SessionStatus.completed,
+      endedAt: DateTime.now().toUtc(),
+    );
+    final remote = _FakeSessionsRepository()
+      ..serverNowCompleter = Completer<DateTime>();
+
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        activeBusinessProvider.overrideWithValue(_business()),
+        sessionsRepositoryProvider.overrideWithValue(remote),
+        customersRepositoryProvider.overrideWithValue(
+          _FakeCustomersRepository(),
+        ),
+        servicesRepositoryProvider.overrideWithValue(_FakeServicesRepository()),
+        paymentsRepositoryProvider.overrideWithValue(
+          _FakePaymentsRepository(const []),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    const scope = (businessId: 'business-1', generation: 0);
+    final localState = await container
+        .read(historyControllerProvider(scope).future)
+        .timeout(const Duration(milliseconds: 100));
+    expect(localState.sessions.single.id, 'local-history');
+
+    remote.serverNowCompleter!.complete(DateTime.now().toUtc());
+  });
+
   testWidgets('boş geçmiş kullanıcıyı filtreleri değiştirmeye yönlendirir', (
     tester,
   ) async {
     // Test sırasından bağımsız olarak standart widget-test görünümüyle başla.
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
+    final db = await _openMemoryDatabase();
+    addTearDown(db.close);
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          appDatabaseProvider.overrideWithValue(db),
           activeBusinessProvider.overrideWithValue(_business()),
           sessionsRepositoryProvider.overrideWithValue(
             _FakeSessionsRepository(),
@@ -47,7 +107,7 @@ void main() {
         child: const MaterialApp(home: HistoryPage()),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpLocalFirstFrame(tester);
 
     expect(
       find.textContaining('Tarih aralığını veya filtreleri değiştirerek'),
@@ -63,6 +123,8 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
+      final db = await _openMemoryDatabase();
+      addTearDown(db.close);
       final payments = _FakePaymentsRepository([
         _paymentStatus('session-unpaid', SessionPaymentStatus.unpaid),
         _paymentStatus('session-partial', SessionPaymentStatus.partiallyPaid),
@@ -72,6 +134,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            appDatabaseProvider.overrideWithValue(db),
             activeBusinessProvider.overrideWithValue(_business()),
             sessionsRepositoryProvider.overrideWithValue(
               _FakeSessionsRepository(
@@ -94,7 +157,7 @@ void main() {
           child: const MaterialApp(home: HistoryPage()),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpLocalFirstFrame(tester);
 
       expect(find.text('Ödenmedi'), findsOneWidget);
       expect(find.text('Kısmi ödendi'), findsOneWidget);
@@ -125,13 +188,28 @@ void main() {
   );
 }
 
+Future<AppDatabase> _openMemoryDatabase() async {
+  final database = AppDatabase.forExecutor(NativeDatabase.memory());
+  await database.customSelect('SELECT 1').get();
+  return database;
+}
+
+Future<void> _pumpLocalFirstFrame(WidgetTester tester) async {
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 20)),
+  );
+  await tester.pump();
+}
+
 class _FakeSessionsRepository implements SessionsRepository {
   _FakeSessionsRepository({this.sessions = const []});
 
   final List<Session> sessions;
+  Completer<DateTime>? serverNowCompleter;
 
   @override
-  Future<DateTime> serverNow() async => DateTime.utc(2026, 7, 18, 10);
+  Future<DateTime> serverNow() async =>
+      serverNowCompleter?.future ?? DateTime.utc(2026, 7, 18, 10);
 
   @override
   Future<List<Session>> getSessionHistory({

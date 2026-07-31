@@ -21,7 +21,7 @@ class AppErrorState extends StatelessWidget {
   Widget build(BuildContext context) {
     final networkError = error is NetworkException;
     final message = networkError
-        ? (error as NetworkException).message
+        ? NetworkException.offlineMessage
         : fallbackMessage;
     final icon = networkError
         ? Icons.wifi_off_rounded
@@ -43,7 +43,7 @@ class AppErrorState extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Tekrar Dene'),
+                label: Text(networkError ? 'Yenile' : 'Tekrar Dene'),
               ),
             ],
           ),

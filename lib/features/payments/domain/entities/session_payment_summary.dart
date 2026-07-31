@@ -5,7 +5,7 @@ import 'package:suretakip/features/payments/domain/entities/payment.dart';
 part 'session_payment_summary.freezed.dart';
 
 @freezed
-class SessionPaymentSummary with _$SessionPaymentSummary {
+abstract class SessionPaymentSummary with _$SessionPaymentSummary {
   const factory SessionPaymentSummary({
     required String sessionId,
     required Money sessionTotal,

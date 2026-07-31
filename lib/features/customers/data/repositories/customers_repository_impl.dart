@@ -1,3 +1,5 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:suretakip/core/errors/domain_exception.dart';
 import 'package:suretakip/core/errors/supabase_error_guard.dart';
 import 'package:suretakip/core/logging/app_logger.dart';
 import 'package:suretakip/core/logging/noop_app_logger.dart';
@@ -5,6 +7,10 @@ import 'package:suretakip/features/customers/data/datasources/customers_remote_d
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
 import 'package:suretakip/features/customers/domain/entities/customer_input.dart';
 import 'package:suretakip/features/customers/domain/repositories/customers_repository.dart';
+
+/// Supabase `.single()` sorgusunda hiç satır dönmediğinde (eşleşen kayıt
+/// kalmadığında) PostgREST'in fırlattığı hata kodu.
+const _noRowsMatchedCode = 'PGRST116';
 
 class CustomersRepositoryImpl implements CustomersRepository {
   const CustomersRepositoryImpl(
@@ -45,25 +51,60 @@ class CustomersRepositoryImpl implements CustomersRepository {
   );
 
   @override
-  Future<Customer> updateCustomer(Customer customer) => _guard(
-    () async => _fromJson(await _dataSource.updateCustomer(_values(customer))),
-  );
+  Future<Customer> updateCustomer(Customer customer) => _guard(() async {
+    try {
+      return _fromJson(
+        await _dataSource.updateCustomer(
+          _values(customer),
+          expectedUpdatedAt: customer.updatedAt,
+        ),
+      );
+    } on PostgrestException catch (error) {
+      throw _asConflictIfStale(error, hasVersionCheck: true);
+    }
+  });
 
   @override
   Future<Customer> setCustomerActive(
     String customerId, {
     required bool isActive,
-  }) => _guard(
-    () async => _fromJson(
-      await _dataSource.updateCustomer({
-        'id': customerId,
-        'is_active': isActive,
-        'archived_at': isActive
-            ? null
-            : DateTime.now().toUtc().toIso8601String(),
-      }),
-    ),
-  );
+    DateTime? expectedUpdatedAt,
+  }) => _guard(() async {
+    try {
+      return _fromJson(
+        await _dataSource.updateCustomer({
+          'id': customerId,
+          'is_active': isActive,
+          'archived_at': isActive
+              ? null
+              : DateTime.now().toUtc().toIso8601String(),
+        }, expectedUpdatedAt: expectedUpdatedAt),
+      );
+    } on PostgrestException catch (error) {
+      throw _asConflictIfStale(
+        error,
+        hasVersionCheck: expectedUpdatedAt != null,
+      );
+    }
+  });
+
+  /// [hasVersionCheck] true iken "eşleşen satır yok" hatası, sorguya eklenen
+  /// `updated_at` filtresinin başarısız olduğu (kayıt bu sırada başka bir
+  /// yerden değiştirildiği) anlamına gelir; bu durumda sessiz üzerine yazma
+  /// yerine ConflictException fırlatılır. Aksi halde hata olduğu gibi geri
+  /// döndürülür ve `_guard` normal Postgres hata eşlemesini uygular.
+  Object _asConflictIfStale(
+    PostgrestException error, {
+    required bool hasVersionCheck,
+  }) {
+    if (hasVersionCheck && error.code == _noRowsMatchedCode) {
+      return const ConflictException(
+        'Bu müşteri kaydı, siz düzenlerken başka bir yerden güncellendi. '
+        'Lütfen sayfayı yenileyip tekrar deneyin.',
+      );
+    }
+    return error;
+  }
 
   Map<String, Object?> _values(Customer value) => {
     'id': value.id,

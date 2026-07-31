@@ -1,26 +1,23 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/core/value_objects/money.dart';
-import 'package:suretakip/features/payments/data/datasources/payments_remote_data_source.dart';
-import 'package:suretakip/features/payments/data/repositories/payments_repository_impl.dart';
 import 'package:suretakip/features/payments/domain/entities/payment.dart';
 import 'package:suretakip/features/payments/domain/entities/payment_input.dart';
 import 'package:suretakip/features/payments/domain/entities/payment_mutation_result.dart';
 import 'package:suretakip/features/payments/domain/entities/refund_input.dart';
 import 'package:suretakip/features/payments/domain/entities/session_payment_summary.dart';
-import 'package:suretakip/features/payments/domain/repositories/payments_repository.dart';
 import 'package:uuid/uuid.dart';
 
-final paymentsRemoteDataSourceProvider = Provider<PaymentsRemoteDataSource>(
-  (ref) => PaymentsRemoteDataSource(ref.watch(supabaseClientProvider)),
-);
-
-final paymentsRepositoryProvider = Provider<PaymentsRepository>((ref) {
-  return PaymentsRepositoryImpl(
-    ref.watch(paymentsRemoteDataSourceProvider),
-    logger: ref.watch(appLoggerProvider),
-  );
-});
+// paymentsRemoteDataSourceProvider / paymentsRemoteRepositoryProvider /
+// paymentsRepositoryProvider artık app_providers.dart'ta tanımlı (sync
+// katmanının offline deposu ile paylaşılır, döngüsel import olmadan).
+// Geriye dönük import uyumu için (mevcut controller/test kodu bu dosyadan
+// import etmeye devam eder) re-export edilir.
+export 'package:suretakip/app/providers/app_providers.dart'
+    show
+        paymentsRemoteDataSourceProvider,
+        paymentsRemoteRepositoryProvider,
+        paymentsRepositoryProvider;
 
 final paymentIdempotencyKeyGeneratorProvider = Provider<String Function()>((
   ref,

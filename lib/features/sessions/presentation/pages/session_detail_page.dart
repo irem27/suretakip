@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/router/app_routes.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
 import 'package:suretakip/core/errors/domain_exception.dart';
 import 'package:suretakip/core/presentation/widgets/app_back_button.dart';
 import 'package:suretakip/core/presentation/widgets/app_error_state.dart';
-import 'package:suretakip/features/payments/presentation/controllers/payments_controller.dart';
 import 'package:suretakip/features/payments/presentation/widgets/payment_summary_panel.dart';
 import 'package:suretakip/features/payments/presentation/widgets/session_payment_sheet.dart';
 import 'package:suretakip/features/sessions/presentation/controllers/sessions_controllers.dart';
@@ -62,12 +62,26 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
             .valueOrNull
             ?.canCancelCompletedSession ??
         false;
+    // Birincil aksiyon (Tamamla/İptal) yoğun tezgahta kaydırma gerektirmemesi
+    // için kalıcı alt barda tutulur; içerik yalnızca özet ve satırları taşır.
+    final detailData = detail.valueOrNull;
+    final status = detailData?.session.status;
+    final isOpen =
+        status == SessionStatus.active || status == SessionStatus.paused;
     return Scaffold(
       appBar: AppBar(
         title: const Text('İşlem Detayı'),
         leading: const AppBackButton(
           fallbackRouteName: AppRouteNames.dashboard,
         ),
+        // Bir aksiyon sunucuda işlenirken (tamamla/iptal/duraklat) yalnızca
+        // düğmeleri kapatmak yetmez; net bir "işleniyor" sinyali gösterilir.
+        bottom: action.isLoading
+            ? const PreferredSize(
+                preferredSize: Size.fromHeight(4),
+                child: LinearProgressIndicator(minHeight: 4),
+              )
+            : null,
       ),
       body: SafeArea(
         child: detail.when(
@@ -89,13 +103,19 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
               sessionId: widget.sessionId,
               currencyCode: data.session.currencyCodeSnapshot,
             ),
-            onComplete: () => _confirmComplete(data),
             onCollect: () =>
                 showSessionPaymentSheet(context, sessionId: widget.sessionId),
             onCancel: _confirmCancel,
           ),
         ),
       ),
+      bottomNavigationBar: (isOpen && detailData != null)
+          ? _SessionCommitBar(
+              loading: action.isLoading,
+              onComplete: () => _confirmComplete(detailData),
+              onCancel: _confirmCancel,
+            )
+          : null,
     );
   }
 
@@ -148,8 +168,13 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
         .complete(sessionId: widget.sessionId);
     if (!mounted) return;
     if (success) {
-      ref.invalidate(sessionPaymentControllerProvider(widget.sessionId));
-      await showSessionPaymentSheet(context, sessionId: widget.sessionId);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'İşlem tamamlandı. Kesin tutar eşitlenince tahsilat yapabilirsiniz.',
+          ),
+        ),
+      );
     } else {
       _showActionError('İşlem tamamlanamadı.');
     }
@@ -181,6 +206,10 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
         .cancel(widget.sessionId);
     if (!mounted) return;
     if (success) {
+      // Sessiz atılma yerine, sonuç dashboard'a dönmeden önce onaylanır.
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('İşlem iptal edildi.')));
       context.goNamed(AppRouteNames.dashboard);
     } else {
       _showActionError('İşlem iptal edilemedi.');
@@ -197,6 +226,61 @@ class _SessionDetailPageState extends ConsumerState<SessionDetailPage> {
   }
 }
 
+/// Açık seansta ekranın altına sabitlenen birincil aksiyon barı. Operatör
+/// ürün listesini kaydırmadan işlemi tek dokunuşla bitirebilir/iptal edebilir.
+class _SessionCommitBar extends StatelessWidget {
+  const _SessionCommitBar({
+    required this.loading,
+    required this.onComplete,
+    required this.onCancel,
+  });
+
+  final bool loading;
+  final VoidCallback onComplete;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surface,
+      elevation: 8,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: loading ? null : onComplete,
+                  icon: loading
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.check_circle_outline_rounded),
+                  label: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(loading ? 'İşleniyor…' : 'İşlemi Tamamla'),
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: loading ? null : onCancel,
+                icon: const Icon(Icons.cancel_outlined),
+                label: const Text('İşlemi İptal Et'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DetailContent extends StatelessWidget {
   const _DetailContent({
     required this.data,
@@ -204,7 +288,6 @@ class _DetailContent extends StatelessWidget {
     required this.canManagePayments,
     required this.onTogglePause,
     required this.onAddProduct,
-    required this.onComplete,
     required this.onCollect,
     required this.onCancel,
   });
@@ -214,20 +297,37 @@ class _DetailContent extends StatelessWidget {
   final bool canManagePayments;
   final VoidCallback onTogglePause;
   final VoidCallback onAddProduct;
-  final VoidCallback onComplete;
   final VoidCallback onCollect;
   final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final session = data.session;
-    final isOpen =
-        session.status == SessionStatus.active ||
-        session.status == SessionStatus.paused;
+    final isActive = session.status == SessionStatus.active;
+    final isPaused = session.status == SessionStatus.paused;
+    final isOpen = isActive || isPaused;
     final isCompleted = session.status == SessionStatus.completed;
+    final isCancelled = session.status == SessionStatus.cancelled;
     final hasFinalTotals = session.grandTotalMinor != null;
     // Açık seansta CANLI önizleme; tamamlanmışta DB'nin kesin tutarları.
     final quote = isOpen ? data.quote : null;
+    // Kesinleşmemiş, iptal de edilmemiş durumlar (ör. draft) yanlışlıkla
+    // "İptal edildi" göstermemeli.
+    final durationText = session.chargedMinutes != null
+        ? '${session.chargedMinutes} dakika'
+        : isCancelled
+        ? 'İptal edildi'
+        : isCompleted
+        ? 'Tamamlandı'
+        : 'Taslak işlem';
+    final durationSubtitle = session.chargedMinutes != null
+        ? 'Kesinleşen ücretlendirme'
+        : isCancelled
+        ? 'Bu işlem iptal edildi'
+        : isCompleted
+        ? 'Kesin tutar eşitleme bekliyor'
+        : 'Henüz başlatılmadı';
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -244,10 +344,24 @@ class _DetailContent extends StatelessWidget {
                 children: [
                   Text(
                     data.customerName ?? 'Misafir Müşteri',
-                    style: Theme.of(context).textTheme.headlineSmall,
+                    style: theme.textTheme.headlineSmall,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  Text(session.serviceNameSnapshot),
+                  Text(
+                    session.serviceNameSnapshot,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Başlangıç: '
+                    '${DateFormat('dd.MM.yyyy HH:mm').format(session.startedAt.toLocal())}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -255,48 +369,111 @@ class _DetailContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 24),
+        // Aktif seansın görsel önceliği: yükseltilmiş kart (Level-2) + navy sayı.
         Card(
+          elevation: isOpen ? 4 : 0,
+          shadowColor: theme.colorScheme.primary.withValues(alpha: 0.25),
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               children: [
                 Text(
-                  isOpen
+                  isActive
                       ? 'AKTİF SÜRE'
+                      : isPaused
+                      ? 'DURAKLATILDI'
                       : (isCompleted ? 'ÜCRETLENDİRİLEN SÜRE' : 'İŞLEM DURUMU'),
-                  style: Theme.of(context).textTheme.labelLarge,
+                  style: theme.textTheme.labelLarge,
                 ),
                 const SizedBox(height: 8),
                 if (isOpen)
                   Semantics(
-                    liveRegion: true,
+                    // Yalnızca aktif seansta canlı bölge; duraklatılmışta sayı
+                    // donuktur ve navy "canlı" otoritesini talep etmemeli.
+                    liveRegion: isActive,
                     label:
-                        'Aktif süre ${formatSessionDuration(quote!.activeDuration)}',
-                    child: Text(
-                      formatSessionDuration(quote.activeDuration),
-                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+                        '${isActive ? 'Aktif süre' : 'Duraklatıldı'} '
+                        '${formatSessionDuration(quote!.activeDuration)}',
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        formatSessionDuration(quote.activeDuration),
+                        style: theme.textTheme.displayMedium?.copyWith(
+                          color: isActive
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w800,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                  )
+                else if (session.chargedMinutes != null)
+                  Semantics(
+                    label: 'Ücretlendirilen süre $durationText',
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        durationText,
+                        style: theme.textTheme.displaySmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w800,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
                       ),
                     ),
                   )
                 else
-                  Text(
-                    session.chargedMinutes != null
-                        ? '${session.chargedMinutes} dakika'
-                        : 'İptal edildi',
-                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      fontWeight: FontWeight.w800,
+                  // Sayısal olmayan terminal/nötr durum: bir cümleyi kahraman
+                  // rakam yuvasına basmak yerine ikon + başlık.
+                  Semantics(
+                    label: durationText,
+                    child: Column(
+                      children: [
+                        Icon(
+                          isCancelled
+                              ? Icons.cancel_outlined
+                              : Icons.hourglass_empty_rounded,
+                          size: 40,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          durationText,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 const SizedBox(height: 8),
-                Text(
-                  isOpen
-                      ? '${quote!.chargedMinutes} dakika ücret önizlemesi'
-                      : (session.chargedMinutes != null
-                            ? 'Kesinleşen ücretlendirme'
-                            : 'Bu işlem iptal edildi'),
-                ),
+                if (isOpen) ...[
+                  Text('${quote!.chargedMinutes} dakika ücret önizlemesi'),
+                  const SizedBox(height: 4),
+                  Text(
+                    isActive
+                        ? 'Süre sunucu saatinden hesaplanır; kesin tutar tamamlamada oluşur.'
+                        : 'Duraklatıldı — süre işlemiyor. Devam Et ile sürdürün.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  // Canlı sayaç tek bir araç olarak okunsun: genel toplam
+                  // ayrı bir karta değil, yükseltilmiş hero kartın içine.
+                  const Divider(height: 24),
+                  _PriceRow(
+                    label: 'Genel Toplam',
+                    value: formatSessionMoney(
+                      quote.grandTotal.minorUnits,
+                      session.currencyCodeSnapshot,
+                    ),
+                    emphasized: true,
+                  ),
+                ] else
+                  Text(durationSubtitle),
               ],
             ),
           ),
@@ -310,6 +487,7 @@ class _DetailContent extends StatelessWidget {
             taxMinor: session.taxMinor,
             grandMinor: quote.grandTotal.minorUnits,
             currency: session.currencyCodeSnapshot,
+            showGrandTotal: false,
           )
         else if (hasFinalTotals)
           _PriceCard(
@@ -320,13 +498,13 @@ class _DetailContent extends StatelessWidget {
             grandMinor: session.grandTotalMinor ?? 0,
             currency: session.currencyCodeSnapshot,
           ),
-        if (isCompleted) ...[
+        if (isCompleted && hasFinalTotals) ...[
           const SizedBox(height: 20),
           Text(
             'Ödeme',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 8),
           PaymentSummaryPanel(
@@ -368,10 +546,7 @@ class _DetailContent extends StatelessWidget {
           spacing: 12,
           runSpacing: 4,
           children: [
-            Text(
-              'Eklenen Ürünler',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            Text('Eklenen Ürünler', style: theme.textTheme.titleLarge),
             Text('${data.items.length} satır'),
           ],
         ),
@@ -396,36 +571,32 @@ class _DetailContent extends StatelessWidget {
                     item.lineTotalMinor,
                     item.currencyCodeSnapshot,
                   ),
+                  style: const TextStyle(
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
                 ),
               ),
             ),
         if (session.notes != null) ...[
           const SizedBox(height: 16),
-          Text('Not', style: Theme.of(context).textTheme.titleMedium),
+          Text('Not', style: theme.textTheme.titleMedium),
           const SizedBox(height: 6),
-          Text(session.notes!),
-        ],
-        if (isOpen) ...[
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: loading ? null : onComplete,
-            icon: const Icon(Icons.check_circle_outline_rounded),
-            label: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 15),
-              child: Text('İşlemi Tamamla'),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(session.notes!),
             ),
           ),
-          TextButton.icon(
-            onPressed: loading ? null : onCancel,
-            icon: const Icon(Icons.cancel_outlined),
-            label: const Text('İşlemi İptal Et'),
-          ),
-        ] else if (session.status == SessionStatus.completed) ...[
+        ],
+        if (isCompleted) ...[
           const SizedBox(height: 24),
           TextButton.icon(
             onPressed: loading ? null : onCancel,
             icon: const Icon(Icons.cancel_outlined),
             label: const Text('Tamamlanan İşlemi İptal Et'),
+            style: TextButton.styleFrom(
+              foregroundColor: theme.colorScheme.error,
+            ),
           ),
         ],
       ],
@@ -441,6 +612,7 @@ class _PriceCard extends StatelessWidget {
     required this.taxMinor,
     required this.grandMinor,
     required this.currency,
+    this.showGrandTotal = true,
   });
 
   final int serviceMinor;
@@ -449,6 +621,10 @@ class _PriceCard extends StatelessWidget {
   final int taxMinor;
   final int grandMinor;
   final String currency;
+
+  /// Açık seansta genel toplam yükseltilmiş hero kartında gösterilir; burada
+  /// yalnızca kalem dökümü kalır (tek sayaç kuralı, çift toplam olmaz).
+  final bool showGrandTotal;
 
   @override
   Widget build(BuildContext context) {
@@ -480,12 +656,14 @@ class _PriceCard extends StatelessWidget {
                 value: formatSessionMoney(taxMinor, currency),
               ),
             ],
-            const Divider(height: 24),
-            _PriceRow(
-              label: 'Genel Toplam',
-              value: formatSessionMoney(grandMinor, currency),
-              emphasized: true,
-            ),
+            if (showGrandTotal) ...[
+              const Divider(height: 24),
+              _PriceRow(
+                label: 'Genel Toplam',
+                value: formatSessionMoney(grandMinor, currency),
+                emphasized: true,
+              ),
+            ],
           ],
         ),
       ),
@@ -505,20 +683,34 @@ class _PriceRow extends StatelessWidget {
   final bool emphasized;
 
   @override
-  Widget build(BuildContext context) => Wrap(
-    alignment: WrapAlignment.spaceBetween,
-    spacing: 12,
-    runSpacing: 4,
-    children: [
-      Text(label),
-      Text(
-        value,
-        style: emphasized
-            ? Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)
-            : Theme.of(context).textTheme.titleMedium,
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // Sabit sütun + sağa hizalı tabular değer: satırlar arasında dikey
+    // rakam karşılaştırması korunur (Right-Align + Tabular-Figures kuralı).
+    final valueStyle =
+        (emphasized
+                ? theme.textTheme.titleLarge?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w800,
+                  )
+                : theme.textTheme.titleMedium)
+            ?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
+    return MergeSemantics(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(child: Text(label)),
+          const SizedBox(width: 12),
+          // Büyük yazı ölçeğinde uzun tutar satırı taşmasın.
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(value, textAlign: TextAlign.end, style: valueStyle),
+            ),
+          ),
+        ],
       ),
-    ],
-  );
+    );
+  }
 }

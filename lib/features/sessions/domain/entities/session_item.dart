@@ -3,7 +3,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'session_item.freezed.dart';
 
 @freezed
-class SessionItem with _$SessionItem {
+abstract class SessionItem with _$SessionItem {
   const factory SessionItem({
     required String id,
     required String businessId,

@@ -4,7 +4,7 @@ import 'package:suretakip/core/domain/domain_enums.dart';
 part 'inventory_movement.freezed.dart';
 
 @freezed
-class InventoryMovement with _$InventoryMovement {
+abstract class InventoryMovement with _$InventoryMovement {
   const factory InventoryMovement({
     required String id,
     required String businessId,

@@ -25,6 +25,33 @@ class SessionsRemoteDataSource {
       .eq('id', sessionId)
       .single();
 
+  Future<List<Map<String, dynamic>>> getOpenSessions(String businessId) =>
+      _client
+          .from(AppConstants.sessionsTable)
+          .select()
+          .eq('business_id', businessId)
+          .inFilter('status', const ['active', 'paused'])
+          .order('started_at');
+
+  Future<List<Map<String, dynamic>>> getSessionsByIds(
+    String businessId,
+    List<String> sessionIds,
+  ) async {
+    if (sessionIds.isEmpty) return const [];
+    final rows = <Map<String, dynamic>>[];
+    for (var offset = 0; offset < sessionIds.length; offset += 100) {
+      final end = (offset + 100).clamp(0, sessionIds.length);
+      rows.addAll(
+        await _client
+            .from(AppConstants.sessionsTable)
+            .select()
+            .eq('business_id', businessId)
+            .inFilter('id', sessionIds.sublist(offset, end)),
+      );
+    }
+    return rows;
+  }
+
   Future<List<Map<String, dynamic>>> getSessionHistory({
     required String businessId,
     required SessionHistoryFilter filter,
@@ -61,14 +88,25 @@ class SessionsRemoteDataSource {
           .eq('session_id', sessionId)
           .order('created_at');
 
-  /// Birden çok seansın ürün kalemlerini TEK sorguda getirir (N+1 önlemi).
+  /// Ürün kalemlerini N+1 üretmeden, URL/veritabanı parametre sınırlarını
+  /// aşmayacak boyutta toplu sorgularla getirir.
   Future<List<Map<String, dynamic>>> getItemsForSessions(
     List<String> sessionIds,
-  ) => _client
-      .from(AppConstants.sessionItemsTable)
-      .select()
-      .inFilter('session_id', sessionIds)
-      .order('created_at');
+  ) async {
+    if (sessionIds.isEmpty) return const [];
+    final rows = <Map<String, dynamic>>[];
+    for (var offset = 0; offset < sessionIds.length; offset += 100) {
+      final end = (offset + 100).clamp(0, sessionIds.length);
+      rows.addAll(
+        await _client
+            .from(AppConstants.sessionItemsTable)
+            .select()
+            .inFilter('session_id', sessionIds.sublist(offset, end))
+            .order('created_at'),
+      );
+    }
+    return rows;
+  }
 
   Future<List<Map<String, dynamic>>> getSessionTimeEntries(String sessionId) =>
       _client
@@ -77,17 +115,27 @@ class SessionsRemoteDataSource {
           .eq('session_id', sessionId)
           .order('started_at');
 
-  /// Birden çok seansın zaman kayıtlarını TEK sorguda getirir.
+  /// Zaman kayıtlarını N+1 üretmeden, sınırlı boyutta toplu sorgularla getirir.
   ///
-  /// Açık işlemleri listelerken her kart için ayrı sorgu atmak N+1 demektir;
-  /// canlı süre gösteren listeler bu toplu sorguyu kullanır.
+  /// Açık işlemleri listelerken her kart için ayrı sorgu atılmaz; çok büyük
+  /// açık-seans kümeleri de tek bir aşırı uzun `in` filtresine dönüşmez.
   Future<List<Map<String, dynamic>>> getTimeEntriesForSessions(
     List<String> sessionIds,
-  ) => _client
-      .from(AppConstants.sessionTimeEntriesTable)
-      .select()
-      .inFilter('session_id', sessionIds)
-      .order('started_at');
+  ) async {
+    if (sessionIds.isEmpty) return const [];
+    final rows = <Map<String, dynamic>>[];
+    for (var offset = 0; offset < sessionIds.length; offset += 100) {
+      final end = (offset + 100).clamp(0, sessionIds.length);
+      rows.addAll(
+        await _client
+            .from(AppConstants.sessionTimeEntriesTable)
+            .select()
+            .inFilter('session_id', sessionIds.sublist(offset, end))
+            .order('started_at'),
+      );
+    }
+    return rows;
+  }
 
   Future<dynamic> startSession({
     required String businessId,

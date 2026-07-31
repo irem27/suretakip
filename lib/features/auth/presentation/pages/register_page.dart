@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/router/app_routes.dart';
 import 'package:suretakip/core/errors/domain_exception.dart';
 import 'package:suretakip/core/utils/form_validators.dart';
@@ -44,6 +45,13 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         ),
       ),
     );
+    // E-posta doğrulaması kapalıysa signUp anında oturum kurar; bu durumda
+    // router'ın redirect mantığı kullanıcıyı zaten doğru sayfaya taşır.
+    // Oturum kurulmadıysa (doğrulama bekleniyorsa) login'e yönlendiririz.
+    final userId = await ref
+        .read(authRepositoryProvider)
+        .getAuthenticatedUserId();
+    if (!mounted || userId != null) return;
     context.go(AppRoutes.login);
   }
 

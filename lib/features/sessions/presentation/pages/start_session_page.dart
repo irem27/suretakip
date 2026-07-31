@@ -136,10 +136,18 @@ class _StartSessionPageState extends ConsumerState<StartSessionPage> {
   }
 
   Future<void> _startSession() async {
+    final scope = ref.read(activeBusinessScopeProvider);
+    final service = ref
+        .read(servicesListControllerProvider(scope))
+        .valueOrNull
+        ?.services
+        .where((s) => s.id == _serviceId)
+        .firstOrNull;
+    if (service == null) return;
     final sessionId = await ref
         .read(startSessionControllerProvider.notifier)
         .start(
-          serviceId: _serviceId!,
+          service: service,
           customerId: _customerId,
           notes: _notesController.text,
         );

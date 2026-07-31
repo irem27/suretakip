@@ -1,0 +1,66 @@
+# Çekirdek akış: seans başlat → başka iş yap → geri dön (hâlâ çalışıyor mu?) → iptal et.
+# Aktif seansın uygulama boyunca yaşadığını ve İşlemler sekmesinden tekrar
+# açılıp iptal edilebildiğini doğrular.
+appId: com.suretakip.app
+tags:
+  - core
+env:
+  MAESTRO_EMAIL: "test@suretakip.com"
+  MAESTRO_PASSWORD: "Test1234!"
+---
+- runFlow: subflows/launch.yaml
+- runFlow: subflows/login.yaml
+
+# 1) Seans başlat
+- tapOn: "Yeni İşlem Başlat"
+- extendedWaitUntil:
+    visible: "Müşteri seç"
+    timeout: 15000
+- tapOn: "Misafir müşteri.*"
+- scrollUntilVisible:
+    element:
+      text: "Hizmet: Standart Hizmet"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Hizmet: Standart Hizmet"
+- scrollUntilVisible:
+    element:
+      text: "Süreyi Başlat"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "Süreyi Başlat"
+- extendedWaitUntil:
+    visible: "İşlem Detayı"
+    timeout: 20000
+
+# 2) Aktif seansı bırakıp başka iş yap: geri dön (AppBar "Geri"; iOS'ta donanım
+#    back yok, tuşa basmak çapraz-platform çalışır), Müşteriler sekmesine uğra
+- tapOn: "Geri"
+- extendedWaitUntil:
+    visible: "Ana Sayfa"
+    timeout: 15000
+- tapOn: "Müşteriler"
+- assertVisible: "Müşteriler"
+
+# 3) İşlemler sekmesine dön: seans hâlâ çalışıyor mu?
+- tapOn: "İşlemler"
+- assertVisible: "Devam Eden İşlemler"
+- extendedWaitUntil:
+    visible: "Misafir müşteri.*"
+    timeout: 15000
+- takeScreenshot: seans-hala-calisiyor
+
+# 4) Seansı aç ve iptal et
+- tapOn: "Misafir müşteri.*"
+- extendedWaitUntil:
+    visible: "İşlem Detayı"
+    timeout: 15000
+- tapOn: "İşlemi İptal Et"
+- extendedWaitUntil:
+    visible: "İptal Et"
+    timeout: 10000
+- tapOn: "İptal Et"
+- extendedWaitUntil:
+    visible: "İşlem iptal edildi.*|İptal edildi"
+    timeout: 20000
+- takeScreenshot: seans-iptal-edildi

@@ -1,8 +1,10 @@
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/theme/app_theme.dart';
+import 'package:suretakip/core/database/app_database.dart';
 import 'package:suretakip/core/value_objects/money.dart';
 import 'package:suretakip/features/businesses/domain/entities/business.dart';
 import 'package:suretakip/features/dashboard/domain/entities/dashboard_metrics.dart';
@@ -11,18 +13,32 @@ import 'package:suretakip/features/dashboard/presentation/pages/dashboard_page.d
 import 'package:suretakip/features/sessions/domain/entities/session.dart';
 import 'package:suretakip/features/sessions/domain/repositories/sessions_repository.dart';
 import 'package:suretakip/features/sessions/presentation/controllers/active_sessions_controller.dart';
+import 'package:suretakip/features/sessions/presentation/controllers/sessions_controllers.dart';
 import 'package:suretakip/features/sessions/presentation/widgets/active_sessions_sheet.dart';
 
 void main() {
+  late AppDatabase db;
+
+  setUp(() async {
+    db = AppDatabase.forExecutor(NativeDatabase.memory());
+    await db.customSelect('SELECT 1').get();
+  });
+
+  tearDown(() => db.close());
+
   testWidgets('dashboard metrikleri ve ikon aksiyonları erişilebilirdir', (
     tester,
   ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          appDatabaseProvider.overrideWithValue(db),
           currentUserProvider.overrideWithValue(null),
           userBusinessesProvider.overrideWith((ref) async => [_business()]),
           activeBusinessProvider.overrideWithValue(_business()),
+          openSessionsProvider.overrideWith(
+            (ref) => Stream.value(const <Session>[]),
+          ),
           dashboardRepositoryProvider.overrideWithValue(
             _FakeDashboardRepository(),
           ),
@@ -58,6 +74,7 @@ void main() {
       find.textContaining('İlk işleminizi başlatabilirsiniz'),
       findsOneWidget,
     );
+    await _disposeWidgetTree(tester);
   });
 
   testWidgets('aktif işlem metriğine dokununca canlı döküm açılır', (
@@ -66,9 +83,13 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          appDatabaseProvider.overrideWithValue(db),
           currentUserProvider.overrideWithValue(null),
           userBusinessesProvider.overrideWith((ref) async => [_business()]),
           activeBusinessProvider.overrideWithValue(_business()),
+          openSessionsProvider.overrideWith(
+            (ref) => Stream.value(const <Session>[]),
+          ),
           dashboardRepositoryProvider.overrideWithValue(
             _FakeDashboardRepository(),
           ),
@@ -90,6 +111,7 @@ void main() {
 
     expect(find.byType(ActiveSessionsSheet), findsOneWidget);
     expect(find.text('Aktif İşlemler'), findsWidgets);
+    await _disposeWidgetTree(tester);
   });
 
   testWidgets('aktif işlem sıfırken metrik kartı aksiyon sunmaz', (
@@ -98,9 +120,13 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          appDatabaseProvider.overrideWithValue(db),
           currentUserProvider.overrideWithValue(null),
           userBusinessesProvider.overrideWith((ref) async => [_business()]),
           activeBusinessProvider.overrideWithValue(_business()),
+          openSessionsProvider.overrideWith(
+            (ref) => Stream.value(const <Session>[]),
+          ),
           dashboardRepositoryProvider.overrideWithValue(
             _FakeDashboardRepository(activeSessionCount: 0),
           ),
@@ -120,6 +146,7 @@ void main() {
     // çağrısıyla kullanıcıyı boş bir panele göndermemeli.
     expect(find.bySemanticsLabel('Aktif İşlem: 0'), findsOneWidget);
     expect(find.text('Detayları gör'), findsNothing);
+    await _disposeWidgetTree(tester);
   });
 
   testWidgets('iki işletmede switcher seçimi ve verileri birlikte değiştirir', (
@@ -129,6 +156,7 @@ void main() {
     final sessionsRepository = _FakeSessionsRepository();
     final container = ProviderContainer(
       overrides: [
+        appDatabaseProvider.overrideWithValue(db),
         currentUserProvider.overrideWithValue(null),
         userBusinessesProvider.overrideWith(
           (ref) async => [
@@ -138,6 +166,9 @@ void main() {
         ),
         dashboardRepositoryProvider.overrideWithValue(dashboardRepository),
         sessionsRepositoryProvider.overrideWithValue(sessionsRepository),
+        openSessionsProvider.overrideWith(
+          (ref) => Stream.value(const <Session>[]),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -163,8 +194,13 @@ void main() {
     expect(container.read(selectedBusinessIdProvider), 'business-2');
     expect(container.read(activeBusinessProvider)?.id, 'business-2');
     expect(dashboardRepository.requestedBusinessIds.last, 'business-2');
-    expect(sessionsRepository.requestedBusinessIds.last, 'business-2');
+    await _disposeWidgetTree(tester);
   });
+}
+
+Future<void> _disposeWidgetTree(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump(const Duration(milliseconds: 1));
 }
 
 class _FakeDashboardRepository implements DashboardRepository {

@@ -1,7 +1,9 @@
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
 import 'package:suretakip/app/providers/business_selection_controller.dart';
+import 'package:suretakip/core/database/app_database.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
 import 'package:suretakip/features/auth/domain/entities/auth_session_state.dart';
 import 'package:suretakip/features/businesses/domain/entities/business.dart';
@@ -117,6 +119,8 @@ void main() {
       businesses: [_business('business-1'), _business('business-2')],
     );
     final servicesRepository = _FakeServicesRepository();
+    final database = AppDatabase.forExecutor(NativeDatabase.memory());
+    addTearDown(database.close);
     final container = ProviderContainer(
       overrides: [
         authSessionStateProvider.overrideWith(
@@ -124,6 +128,7 @@ void main() {
         ),
         businessesRepositoryProvider.overrideWithValue(businessesRepository),
         servicesRepositoryProvider.overrideWithValue(servicesRepository),
+        appDatabaseProvider.overrideWithValue(database),
       ],
     );
     addTearDown(container.dispose);

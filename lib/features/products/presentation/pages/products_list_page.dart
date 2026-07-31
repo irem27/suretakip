@@ -33,6 +33,8 @@ class _ProductsListPageState extends ConsumerState<ProductsListPage> {
     final listProvider = productsListControllerProvider(scope);
     final listState = ref.watch(listProvider);
     final formState = ref.watch(productFormControllerProvider);
+    // Yalnızca setActive işlemindeki ürünün anahtarını kilitlemek için.
+    final updatingProductId = ref.watch(productUpdatingIdProvider);
     final canManageCatalog =
         ref.watch(businessCapabilitiesProvider).valueOrNull?.canManageCatalog ??
         false;
@@ -130,7 +132,9 @@ class _ProductsListPageState extends ConsumerState<ProductsListPage> {
                         separatorBuilder: (_, _) => const SizedBox(height: 12),
                         itemBuilder: (context, index) => _ProductCard(
                           product: products[index],
-                          isUpdating: formState.isLoading,
+                          isUpdating:
+                              formState.isLoading &&
+                              updatingProductId == products[index].id,
                           onTap: () => context.pushNamed(
                             AppRouteNames.productDetail,
                             pathParameters: {'productId': products[index].id},

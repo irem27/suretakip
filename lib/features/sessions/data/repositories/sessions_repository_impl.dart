@@ -1,4 +1,5 @@
 import 'package:suretakip/core/domain/domain_enums.dart';
+import 'package:suretakip/core/errors/domain_exception.dart';
 import 'package:suretakip/core/errors/supabase_error_guard.dart';
 import 'package:suretakip/core/logging/app_logger.dart';
 import 'package:suretakip/core/logging/noop_app_logger.dart';
@@ -34,6 +35,22 @@ class SessionsRepositoryImpl implements SessionsRepository {
   Future<Session> getSession(String sessionId) => _guard(
     () async => _sessionFromJson(await _dataSource.getSession(sessionId)),
   );
+
+  @override
+  Future<List<Session>> getOpenSessions({required String businessId}) =>
+      _guard(() async {
+        final rows = await _dataSource.getOpenSessions(businessId);
+        return rows.map(_sessionFromJson).toList(growable: false);
+      });
+
+  @override
+  Future<List<Session>> getSessionsByIds({
+    required String businessId,
+    required List<String> sessionIds,
+  }) => _guard(() async {
+    final rows = await _dataSource.getSessionsByIds(businessId, sessionIds);
+    return rows.map(_sessionFromJson).toList(growable: false);
+  });
 
   @override
   Future<List<Session>> getSessionHistory({
@@ -157,63 +174,70 @@ class SessionsRepositoryImpl implements SessionsRepository {
   );
 
   Session _sessionFromJson(Map<String, dynamic> json) => Session(
-    id: json['id'] as String,
-    businessId: json['business_id'] as String,
+    id: _requiredString(json, 'id'),
+    businessId: _requiredString(json, 'business_id'),
     customerId: json['customer_id'] as String?,
-    serviceId: json['service_id'] as String,
-    openedByMemberId: json['opened_by_member_id'] as String,
+    serviceId: _requiredString(json, 'service_id'),
+    openedByMemberId: _requiredString(json, 'opened_by_member_id'),
     closedByMemberId: json['closed_by_member_id'] as String?,
-    status: _sessionStatus(json['status'] as String),
-    startedAt: DateTime.parse(json['started_at'] as String),
+    status: _sessionStatus(_requiredString(json, 'status')),
+    startedAt: DateTime.parse(_requiredString(json, 'started_at')),
     endedAt: _date(json['ended_at']),
     chargedMinutes: json['charged_minutes'] as int?,
-    serviceNameSnapshot: json['service_name_snapshot'] as String,
-    pricePerMinuteMinorSnapshot: json['price_per_minute_minor_snapshot'] as int,
-    roundingIntervalMinutesSnapshot:
-        json['rounding_interval_minutes_snapshot'] as int,
-    minimumChargeMinutesSnapshot:
-        json['minimum_charge_minutes_snapshot'] as int,
-    currencyCodeSnapshot: json['currency_code_snapshot'] as String,
+    serviceNameSnapshot: _requiredString(json, 'service_name_snapshot'),
+    pricePerMinuteMinorSnapshot: _requiredInt(
+      json,
+      'price_per_minute_minor_snapshot',
+    ),
+    roundingIntervalMinutesSnapshot: _requiredInt(
+      json,
+      'rounding_interval_minutes_snapshot',
+    ),
+    minimumChargeMinutesSnapshot: _requiredInt(
+      json,
+      'minimum_charge_minutes_snapshot',
+    ),
+    currencyCodeSnapshot: _requiredString(json, 'currency_code_snapshot'),
     serviceSubtotalMinor: json['service_subtotal_minor'] as int?,
     productsSubtotalMinor: json['products_subtotal_minor'] as int?,
-    discountMinor: json['discount_minor'] as int,
-    taxMinor: json['tax_minor'] as int,
+    discountMinor: _requiredInt(json, 'discount_minor'),
+    taxMinor: _requiredInt(json, 'tax_minor'),
     grandTotalMinor: json['grand_total_minor'] as int?,
     notes: json['notes'] as String?,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    createdAt: DateTime.parse(_requiredString(json, 'created_at')),
+    updatedAt: DateTime.parse(_requiredString(json, 'updated_at')),
   );
 
   SessionItem _itemFromJson(Map<String, dynamic> json) => SessionItem(
-    id: json['id'] as String,
-    businessId: json['business_id'] as String,
-    sessionId: json['session_id'] as String,
+    id: _requiredString(json, 'id'),
+    businessId: _requiredString(json, 'business_id'),
+    sessionId: _requiredString(json, 'session_id'),
     productId: json['product_id'] as String?,
-    productNameSnapshot: json['product_name_snapshot'] as String,
+    productNameSnapshot: _requiredString(json, 'product_name_snapshot'),
     skuSnapshot: json['sku_snapshot'] as String?,
-    unitPriceMinorSnapshot: json['unit_price_minor_snapshot'] as int,
-    currencyCodeSnapshot: json['currency_code_snapshot'] as String,
-    quantity: json['quantity'] as int,
-    discountMinor: json['discount_minor'] as int,
-    taxMinor: json['tax_minor'] as int,
-    lineTotalMinor: json['line_total_minor'] as int,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    updatedAt: DateTime.parse(json['updated_at'] as String),
+    unitPriceMinorSnapshot: _requiredInt(json, 'unit_price_minor_snapshot'),
+    currencyCodeSnapshot: _requiredString(json, 'currency_code_snapshot'),
+    quantity: _requiredInt(json, 'quantity'),
+    discountMinor: _requiredInt(json, 'discount_minor'),
+    taxMinor: _requiredInt(json, 'tax_minor'),
+    lineTotalMinor: _requiredInt(json, 'line_total_minor'),
+    createdAt: DateTime.parse(_requiredString(json, 'created_at')),
+    updatedAt: DateTime.parse(_requiredString(json, 'updated_at')),
   );
 
   SessionTimeEntry _timeEntryFromJson(Map<String, dynamic> json) =>
       SessionTimeEntry(
-        id: json['id'] as String,
-        businessId: json['business_id'] as String,
-        sessionId: json['session_id'] as String,
-        entryType: switch (json['entry_type'] as String) {
+        id: _requiredString(json, 'id'),
+        businessId: _requiredString(json, 'business_id'),
+        sessionId: _requiredString(json, 'session_id'),
+        entryType: switch (_requiredString(json, 'entry_type')) {
           'active' => TimeEntryType.active,
           'paused' => TimeEntryType.paused,
           final value => throw FormatException('Bilinmeyen zaman türü: $value'),
         },
-        startedAt: DateTime.parse(json['started_at'] as String),
+        startedAt: DateTime.parse(_requiredString(json, 'started_at')),
         endedAt: _date(json['ended_at']),
-        createdAt: DateTime.parse(json['created_at'] as String),
+        createdAt: DateTime.parse(_requiredString(json, 'created_at')),
       );
 
   SessionStatus _sessionStatus(String value) => switch (value) {
@@ -227,6 +251,34 @@ class SessionsRepositoryImpl implements SessionsRepository {
 
   DateTime? _date(Object? value) =>
       value == null ? null : DateTime.parse(value as String);
+
+  /// Sunucudan gelen zorunlu bir metin alanını güvenli biçimde ayrıştırır.
+  ///
+  /// `as String` yerine kullanılır: alan `null` veya beklenmeyen bir türde
+  /// gelirse ham `TypeError` yerine kök nedeni açıklayan bir
+  /// [DatabaseException] fırlatılır.
+  String _requiredString(Map<String, dynamic> json, String field) {
+    final value = json[field];
+    if (value is String) return value;
+    throw DatabaseException(
+      'Sunucudan gelen "$field" alanı eksik veya geçersiz türde.',
+      code: 'invalid_row_field',
+    );
+  }
+
+  /// Sunucudan gelen zorunlu bir sayısal alanı güvenli biçimde ayrıştırır.
+  ///
+  /// `as int` yerine kullanılır: alan `null` veya beklenmeyen bir türde
+  /// gelirse ham `TypeError` yerine kök nedeni açıklayan bir
+  /// [DatabaseException] fırlatılır.
+  int _requiredInt(Map<String, dynamic> json, String field) {
+    final value = json[field];
+    if (value is int) return value;
+    throw DatabaseException(
+      'Sunucudan gelen "$field" alanı eksik veya geçersiz türde.',
+      code: 'invalid_row_field',
+    );
+  }
 
   String? _nullIfBlank(String? value) {
     final normalized = value?.trim();

@@ -46,15 +46,21 @@ jobs:
       # Kapsanan satır AZALMADI, arttı (1904 -> 2030); yalnızca oran dürüstleşti.
       #
       # 2026-07-18 (2): Test paketi genişletildikten sonra eşik 65'e YÜKSELTİLDİ.
-      # Güncel ölçüm %69,9 (2979/4259 satır). Aşağıdaki MIN_COVERAGE bu commit'teki
-      # gerçek değerdir; yukarıdaki 45/52 rakamları yalnızca tarihsel kayıttır.
+      #
+      # 2026-07-22: Kod üretici (drift `*.g.dart`, freezed `*.freezed.dart`)
+      # dosyaları paydadan DIŞLANDI. Offline şeması büyüyünce `app_database.g.dart`
+      # ~3900 satıra çıkıp elle yazılmayan üretilmiş kodla oranı yapay olarak
+      # düşürüyordu (%56,5). Üretilmiş kod test edilmez; yalnızca elle yazılan
+      # kaynak ölçülür. Bu dışlamayla güncel ölçüm %71,6'dır.
       - name: Enforce coverage floor
         env:
           MIN_COVERAGE: "65"
         run: |
-          pct=$(awk -F: '/^DA:/{total++; if ($2 ~ /,[1-9]/) covered++}
-                         END {if (total == 0) print "0";
-                              else printf "%.1f", (covered / total) * 100}' \
+          pct=$(awk -F: '
+                  /^SF:/ { gen = ($0 ~ /\.g\.dart$/ || $0 ~ /\.freezed\.dart$/) }
+                  /^DA:/ { if (!gen) { total++; if ($2 ~ /,[1-9]/) covered++ } }
+                  END {if (total == 0) print "0";
+                       else printf "%.1f", (covered / total) * 100}' \
                 coverage/lcov.info)
           echo "Satır kapsamı: %$pct (alt sınır: %$MIN_COVERAGE, hedef: %80)"
           if ! awk -v p="$pct" -v m="$MIN_COVERAGE" 'BEGIN { exit !(p + 0 >= m + 0) }'; then
@@ -97,6 +103,29 @@ jobs:
             --dart-define=SUPABASE_URL=https://ci.example.supabase.co \
             --dart-define=SUPABASE_ANON_KEY=ci-placeholder-anon-key
 
+  ios-build:
+    name: iOS build doğrulama
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS without codesigning
+        run: |
+          flutter build ios --debug --no-codesign \
+            --dart-define=SUPABASE_URL=https://ci.example.supabase.co \
+            --dart-define=SUPABASE_ANON_KEY=ci-placeholder-anon-key
+
   migrations:
     name: Supabase migrations + RLS/RPC test suite
     runs-on: ubuntu-latest
@@ -133,3 +162,9 @@ jobs:
           fi
           docker exec -i "$container" \
             psql -U postgres -d postgres -q < supabase/tests/rls_test.sql
+          docker exec -i "$container" \
+            psql -U postgres -d postgres -q < supabase/tests/create_customer_test.sql
+          docker exec -i "$container" \
+            psql -U postgres -d postgres -q < supabase/tests/offline_session_test.sql
+          docker exec -i "$container" psql -U postgres -d postgres -q < supabase/tests/sync_delta_test.sql
+          bash supabase/tests/payment_concurrency_test.sh

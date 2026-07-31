@@ -11,10 +11,17 @@ abstract interface class CustomersRepository {
 
   Future<Customer> createCustomer(CustomerInput input);
 
+  /// [customer.updatedAt] alınırken beklenen değerdir; kayıt bu andan sonra
+  /// başka bir yerden değiştirildiyse güncelleme sessizce üzerine yazmak
+  /// yerine ConflictException fırlatır (iyimser eşzamanlılık denetimi).
   Future<Customer> updateCustomer(Customer customer);
 
+  /// [expectedUpdatedAt] verilirse iyimser eşzamanlılık denetimi uygulanır:
+  /// kayıt bu andan sonra başka bir yerden değiştirildiyse güncelleme
+  /// sessizce üzerine yazmak yerine ConflictException fırlatır.
   Future<Customer> setCustomerActive(
     String customerId, {
     required bool isActive,
+    DateTime? expectedUpdatedAt,
   });
 }

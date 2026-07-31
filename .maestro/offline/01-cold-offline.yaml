@@ -1,0 +1,33 @@
+# Offline SENARYO A — "hiç internet yokken" (soğuk başlangıç).
+# Ön koşul (harici script): önce ONLINE giriş yapılıp önbellek ısıtılır,
+# ardından 10.0.2.2 (lokal Supabase) bloklanır. Bu flow clearState YAPMAZ —
+# önbellekteki oturum + veriyle uygulamanın çevrimdışı açılıp çalıştığını
+# doğrular ve çevrimdışı bir müşteri ekler (offline-first: yerel yaz + kuyruk).
+appId: com.suretakip.app
+env:
+  OFFLINE_CUSTOMER: "Offline Soguk Musteri"
+---
+# clearState YOK — önbellekteki oturumla açılır
+- launchApp
+# Çevrimdışı olsa da önbellekten Ana Sayfa gelmeli
+- extendedWaitUntil:
+    visible: "Ana Sayfa"
+    timeout: 25000
+- takeScreenshot: offline-cold-dashboard
+
+# Çevrimdışı müşteri ekle
+- tapOn: "Müşteriler"
+- assertVisible: "Müşteriler"
+- tapOn: "Yeni Müşteri"
+- extendedWaitUntil:
+    visible: "Ad soyad"
+    timeout: 10000
+- tapOn: "Ad soyad"
+- inputText: ${OFFLINE_CUSTOMER}
+- tapOn: "Yeni Müşteri"
+- tapOn: "Müşteriyi Kaydet"
+# Offline-first: yerel yazım anında; kayıt detay/liste üzerinden görünür
+- extendedWaitUntil:
+    visible: "${OFFLINE_CUSTOMER}|Müşteri Detayı"
+    timeout: 15000
+- takeScreenshot: offline-cold-customer-added

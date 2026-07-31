@@ -1,0 +1,30 @@
+# Müşteri ekleme akışı.
+# Müşteriler sekmesi → "Yeni Müşteri" (FAB) → form doldur → "Müşteriyi Kaydet".
+appId: com.suretakip.app
+tags:
+  - core
+env:
+  MAESTRO_EMAIL: "test@suretakip.com"
+  MAESTRO_PASSWORD: "Test1234!"
+---
+- runFlow: subflows/launch.yaml
+- runFlow: subflows/login.yaml
+- tapOn: "Müşteriler"
+- assertVisible: "Müşteriler"
+# Ekleme butonu: FAB "Yeni Müşteri"
+- tapOn: "Yeni Müşteri"
+# Form: "Ad soyad" alanı
+- extendedWaitUntil:
+    visible: "Ad soyad"
+    timeout: 10000
+- tapOn: "Ad soyad"
+- inputText: "Maestro Test Müşterisi"
+# Başlığa dokunarak klavyeyi kapat (app kökündeki dışarı-tıkla-kapat); böylece
+# alt-bardaki "Müşteriyi Kaydet" klavye altında kalmaz. Çapraz-platform.
+- tapOn: "Yeni Müşteri"
+- tapOn: "Müşteriyi Kaydet"
+# Kayıt başarılıysa müşteri detayına gidilir (pushReplacement).
+- extendedWaitUntil:
+    visible: "Müşteri Detayı"
+    timeout: 15000
+- takeScreenshot: musteri-eklendi

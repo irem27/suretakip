@@ -1,7 +1,12 @@
+import 'dart:async';
+
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:suretakip/app/providers/app_providers.dart';
+import 'package:suretakip/core/database/app_database.dart';
 import 'package:suretakip/core/domain/domain_enums.dart';
+import 'package:suretakip/core/errors/domain_exception.dart';
 import 'package:suretakip/features/businesses/domain/entities/business.dart';
 import 'package:suretakip/features/customers/domain/entities/customer.dart';
 import 'package:suretakip/features/customers/domain/repositories/customers_repository.dart';
@@ -9,7 +14,6 @@ import 'package:suretakip/features/history/presentation/controllers/history_cont
 import 'package:suretakip/features/payments/domain/entities/payment.dart';
 import 'package:suretakip/features/payments/domain/entities/session_payment_status_summary.dart';
 import 'package:suretakip/features/payments/domain/repositories/payments_repository.dart';
-import 'package:suretakip/features/payments/presentation/controllers/payments_controller.dart';
 import 'package:suretakip/core/value_objects/money.dart';
 import 'package:suretakip/features/services/domain/entities/service.dart';
 import 'package:suretakip/features/services/domain/repositories/services_repository.dart';
@@ -21,10 +25,14 @@ void main() {
   test(
     'geçmiş controller sunucu zamanı ve işletme timezoneuyla filtreler',
     () async {
+      final db = AppDatabase.forExecutor(NativeDatabase.memory());
+      addTearDown(db.close);
+      await db.customSelect('SELECT 1').get();
       final sessions = _FakeSessionsRepository();
       final payments = _FakePaymentsRepository();
       final container = ProviderContainer(
         overrides: [
+          appDatabaseProvider.overrideWithValue(db),
           activeBusinessProvider.overrideWithValue(_business()),
           sessionsRepositoryProvider.overrideWithValue(sessions),
           customersRepositoryProvider.overrideWithValue(
@@ -38,9 +46,10 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final state = await container.read(
-        historyControllerProvider(_scope).future,
-      );
+      final provider = historyControllerProvider(_scope);
+      await container.read(provider.future);
+      await container.read(provider.notifier).refresh();
+      final state = container.read(provider).requireValue;
 
       expect(state.sessions, hasLength(1));
       expect(
@@ -58,6 +67,90 @@ void main() {
       ]);
     },
   );
+
+  test(
+    'filtre uçan istek sırasında değişirse eski sonuç yeni state\'i ezmez',
+    () async {
+      final db = AppDatabase.forExecutor(NativeDatabase.memory());
+      addTearDown(db.close);
+      await db.customSelect('SELECT 1').get();
+      final sessions = _SlowFirstCustomerSessionsRepository();
+      final container = ProviderContainer(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          activeBusinessProvider.overrideWithValue(_business()),
+          sessionsRepositoryProvider.overrideWithValue(sessions),
+          customersRepositoryProvider.overrideWithValue(
+            _FakeCustomersRepository(),
+          ),
+          servicesRepositoryProvider.overrideWithValue(
+            _FakeServicesRepository(),
+          ),
+          paymentsRepositoryProvider.overrideWithValue(
+            _FakePaymentsRepository(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final provider = historyControllerProvider(_scope);
+      // autoDispose ile testler arasındaki beklemelerde sağlayıcının erken
+      // kapatılıp yeniden inşa edilmesini önlemek için canlı tut.
+      final subscription = container.listen(provider, (_, _) {});
+      addTearDown(subscription.close);
+      await container.read(provider.future);
+      final notifier = container.read(provider.notifier);
+
+      // 'a' seçilince sunucu isteği 'a' için başlar ve tamamlanana kadar bekler.
+      await notifier.setCustomer('customer-a');
+      await pumpEventQueue();
+      // 'a' isteği uçarken filtre 'b'ye değişir.
+      await notifier.setCustomer('customer-b');
+      await pumpEventQueue();
+      // Şimdi 'a' isteğinin sunucu yanıtını serbest bırak; bu, sonucu atıp
+      // güncel filtre ('b') için yeniden yenileme tetiklemeli.
+      sessions.completeSlowRequest();
+      await pumpEventQueue(times: 200);
+
+      final state = container.read(provider).requireValue;
+      expect(state.customerId, 'customer-b');
+      expect(sessions.lastRequestedCustomerId, 'customer-b');
+    },
+  );
+
+  test('elle yenile ağ-dışı hatayı yutmaz ve durumu hataya çevirir', () async {
+    final db = AppDatabase.forExecutor(NativeDatabase.memory());
+    addTearDown(db.close);
+    await db.customSelect('SELECT 1').get();
+    final sessions = _AlwaysFailingSessionsRepository();
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        activeBusinessProvider.overrideWithValue(_business()),
+        sessionsRepositoryProvider.overrideWithValue(sessions),
+        customersRepositoryProvider.overrideWithValue(
+          _FakeCustomersRepository(),
+        ),
+        servicesRepositoryProvider.overrideWithValue(_FakeServicesRepository()),
+        paymentsRepositoryProvider.overrideWithValue(_FakePaymentsRepository()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final provider = historyControllerProvider(_scope);
+    final subscription = container.listen(provider, (_, _) {});
+    addTearDown(subscription.close);
+    await container.read(provider.future);
+    final notifier = container.read(provider.notifier);
+
+    await expectLater(
+      notifier.refresh(),
+      throwsA(isA<AuthenticationException>()),
+    );
+
+    final state = container.read(provider);
+    expect(state.hasError, isTrue);
+  });
 }
 
 class _FakePaymentsRepository implements PaymentsRepository {
@@ -90,6 +183,56 @@ class _FakePaymentsRepository implements PaymentsRepository {
 }
 
 const BusinessScope _scope = (businessId: 'business-1', generation: 0);
+
+/// İlk 'customer-a' isteğini bir Completer serbest bırakana kadar bekletir,
+/// diğer tüm isteklere hemen yanıt verir. Filtre-yarışı testinde kullanılır.
+class _SlowFirstCustomerSessionsRepository implements SessionsRepository {
+  String? lastRequestedCustomerId;
+  var _slowRequestStarted = false;
+  final _slowRequestCompleter = Completer<void>();
+
+  void completeSlowRequest() {
+    if (!_slowRequestCompleter.isCompleted) _slowRequestCompleter.complete();
+  }
+
+  @override
+  Future<DateTime> serverNow() async => DateTime.utc(2026, 7, 18, 12);
+
+  @override
+  Future<List<Session>> getSessionHistory({
+    required String businessId,
+    required SessionHistoryFilter filter,
+  }) async {
+    lastRequestedCustomerId = filter.customerId;
+    if (filter.customerId == 'customer-a' && !_slowRequestStarted) {
+      _slowRequestStarted = true;
+      await _slowRequestCompleter.future;
+    }
+    return [_session()];
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// Her çağrı ağ-dışı bir hata (kimlik doğrulama) fırlatır. Elle-yenile
+/// hata-yüzeyleme testinde kullanılır; arka plan (otomatik) yenilemenin bu
+/// hatayı yuttuğu, elle yenilemenin ise yüzeye çıkardığı doğrulanır.
+class _AlwaysFailingSessionsRepository implements SessionsRepository {
+  @override
+  Future<DateTime> serverNow() async => DateTime.utc(2026, 7, 18, 12);
+
+  @override
+  Future<List<Session>> getSessionHistory({
+    required String businessId,
+    required SessionHistoryFilter filter,
+  }) async {
+    throw const AuthenticationException('Oturum süresi doldu');
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 class _FakeSessionsRepository implements SessionsRepository {
   String? businessId;

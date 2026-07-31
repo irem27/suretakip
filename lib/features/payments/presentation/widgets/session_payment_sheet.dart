@@ -192,7 +192,18 @@ class _SessionPaymentSheetState extends ConsumerState<SessionPaymentSheet> {
                 }
                 return null;
               },
-              onChanged: (_) => _retryPending = false,
+              onChanged: (value) {
+                if (!_retryPending) return;
+                int? parsed;
+                try {
+                  parsed = FormValidators.moneyToMinor(value);
+                } on FormatException {
+                  parsed = null;
+                }
+                if (parsed != _retryAmount) {
+                  _retryPending = false;
+                }
+              },
             ),
             const SizedBox(height: 20),
             FilledButton.icon(

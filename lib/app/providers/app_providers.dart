@@ -1,6 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:suretakip/app/providers/sync_providers.dart';
+import 'package:suretakip/core/database/app_database.dart';
 import 'package:suretakip/core/logging/app_logger_provider.dart';
+import 'package:suretakip/features/businesses/data/local/businesses_local_data_source.dart';
+import 'package:suretakip/features/businesses/data/repositories/cached_businesses_repository.dart';
+import 'package:suretakip/features/products/data/local/products_local_data_source.dart';
+import 'package:suretakip/features/products/data/repositories/offline_products_repository.dart';
+import 'package:suretakip/features/services/data/local/services_local_data_source.dart';
+import 'package:suretakip/features/services/data/repositories/offline_services_repository.dart';
 import 'package:suretakip/features/auth/data/datasources/auth_remote_data_source.dart';
 import 'package:suretakip/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:suretakip/features/auth/domain/entities/auth_session_state.dart';
@@ -17,6 +25,9 @@ import 'package:suretakip/features/customers/domain/repositories/customers_repos
 import 'package:suretakip/features/dashboard/data/datasources/dashboard_remote_data_source.dart';
 import 'package:suretakip/features/dashboard/data/repositories/dashboard_repository_impl.dart';
 import 'package:suretakip/features/dashboard/domain/repositories/dashboard_repository.dart';
+import 'package:suretakip/features/payments/data/datasources/payments_remote_data_source.dart';
+import 'package:suretakip/features/payments/data/repositories/payments_repository_impl.dart';
+import 'package:suretakip/features/payments/domain/repositories/payments_repository.dart';
 import 'package:suretakip/features/products/data/datasources/products_remote_data_source.dart';
 import 'package:suretakip/features/products/data/repositories/products_repository_impl.dart';
 import 'package:suretakip/features/products/domain/repositories/products_repository.dart';
@@ -35,6 +46,18 @@ export 'package:suretakip/core/logging/app_logger_provider.dart';
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
   return Supabase.instance.client;
 });
+
+/// Uygulama ömrü boyunca tek Drift veritabanı örneği (tek writer). Offline
+/// önbellek ve sync katmanı bunu paylaşır.
+final appDatabaseProvider = Provider<AppDatabase>((ref) {
+  final db = AppDatabase();
+  ref.onDispose(db.close);
+  return db;
+});
+
+final businessesLocalDataSourceProvider = Provider<BusinessesLocalDataSource>(
+  (ref) => BusinessesLocalDataSource(ref.watch(appDatabaseProvider)),
+);
 
 final authRemoteDataSourceProvider = Provider<AuthRemoteDataSource>((ref) {
   return AuthRemoteDataSource(ref.watch(supabaseClientProvider));
@@ -65,8 +88,14 @@ final businessesRemoteDataSourceProvider = Provider<BusinessesRemoteDataSource>(
 );
 
 final businessesRepositoryProvider = Provider<BusinessesRepository>((ref) {
-  return BusinessesRepositoryImpl(
-    ref.watch(businessesRemoteDataSourceProvider),
+  // Read-through önbellek: internetsiz açılışta son senkronlanan işletme +
+  // rol yerelden okunur; çevrimiçiyken sunucu otoriterdir ve önbellek tazelenir.
+  return CachedBusinessesRepository(
+    remote: BusinessesRepositoryImpl(
+      ref.watch(businessesRemoteDataSourceProvider),
+      logger: ref.watch(appLoggerProvider),
+    ),
+    local: ref.watch(businessesLocalDataSourceProvider),
     logger: ref.watch(appLoggerProvider),
   );
 });
@@ -188,23 +217,66 @@ final servicesRemoteDataSourceProvider = Provider<ServicesRemoteDataSource>(
   (ref) => ServicesRemoteDataSource(ref.watch(supabaseClientProvider)),
 );
 
-final servicesRepositoryProvider = Provider<ServicesRepository>((ref) {
-  return ServicesRepositoryImpl(
-    ref.watch(servicesRemoteDataSourceProvider),
+final servicesLocalDataSourceProvider = Provider<ServicesLocalDataSource>(
+  (ref) => ServicesLocalDataSource(ref.watch(appDatabaseProvider)),
+);
+
+// Offline-first (Sprint 1, müşteri deseniyle birebir aynı): write yolu her
+// zaman yerel + outbox'tan geçer, `remote` yalnız önbellek boşken/tazeleme
+// için kullanılır. Bu tanım kasıtlı olarak `sync_providers.dart`'taki
+// `syncEngineProvider`/`deviceIdentityProvider`'ı paylaşır (dosyalar arası
+// döngüsel import Dart'ta geçerlidir; her iki taraf da yalnız lazy Provider
+// closure'ları içerir).
+// Concrete offline repo (pullFromServer gibi offline'a özel metotlar için).
+final offlineServicesRepositoryProvider = Provider<OfflineServicesRepository>((
+  ref,
+) {
+  return OfflineServicesRepository(
+    local: ref.watch(servicesLocalDataSourceProvider),
+    remote: ServicesRepositoryImpl(
+      ref.watch(servicesRemoteDataSourceProvider),
+      logger: ref.watch(appLoggerProvider),
+    ),
+    deviceIdentity: ref.watch(deviceIdentityProvider),
+    syncEngine: ref.watch(syncEngineProvider),
+    currentActorUserId: () =>
+        ref.read(supabaseClientProvider).auth.currentUser?.id,
     logger: ref.watch(appLoggerProvider),
   );
 });
+
+final servicesRepositoryProvider = Provider<ServicesRepository>(
+  (ref) => ref.watch(offlineServicesRepositoryProvider),
+);
 
 final productsRemoteDataSourceProvider = Provider<ProductsRemoteDataSource>(
   (ref) => ProductsRemoteDataSource(ref.watch(supabaseClientProvider)),
 );
 
-final productsRepositoryProvider = Provider<ProductsRepository>((ref) {
-  return ProductsRepositoryImpl(
-    ref.watch(productsRemoteDataSourceProvider),
+final productsLocalDataSourceProvider = Provider<ProductsLocalDataSource>(
+  (ref) => ProductsLocalDataSource(ref.watch(appDatabaseProvider)),
+);
+
+final offlineProductsRepositoryProvider = Provider<OfflineProductsRepository>((
+  ref,
+) {
+  return OfflineProductsRepository(
+    local: ref.watch(productsLocalDataSourceProvider),
+    remote: ProductsRepositoryImpl(
+      ref.watch(productsRemoteDataSourceProvider),
+      logger: ref.watch(appLoggerProvider),
+    ),
+    deviceIdentity: ref.watch(deviceIdentityProvider),
+    syncEngine: ref.watch(syncEngineProvider),
+    currentActorUserId: () =>
+        ref.read(supabaseClientProvider).auth.currentUser?.id,
     logger: ref.watch(appLoggerProvider),
   );
 });
+
+final productsRepositoryProvider = Provider<ProductsRepository>(
+  (ref) => ref.watch(offlineProductsRepositoryProvider),
+);
 
 final customersRemoteDataSourceProvider = Provider<CustomersRemoteDataSource>(
   (ref) => CustomersRemoteDataSource(ref.watch(supabaseClientProvider)),
@@ -226,6 +298,29 @@ final sessionsRepositoryProvider = Provider<SessionsRepository>((ref) {
     ref.watch(sessionsRemoteDataSourceProvider),
     logger: ref.watch(appLoggerProvider),
   );
+});
+
+final paymentsRemoteDataSourceProvider = Provider<PaymentsRemoteDataSource>(
+  (ref) => PaymentsRemoteDataSource(ref.watch(supabaseClientProvider)),
+);
+
+/// Sunucu-otoriteli çevrimiçi uygulama (`record_session_payment` RPC'sini
+/// doğrudan çağırır). Offline-first kararı için bkz.
+/// `OfflinePaymentsRepository` dosya başı açıklaması.
+final paymentsRemoteRepositoryProvider = Provider<PaymentsRepository>((ref) {
+  return PaymentsRepositoryImpl(
+    ref.watch(paymentsRemoteDataSourceProvider),
+    logger: ref.watch(appLoggerProvider),
+  );
+});
+
+/// Müşteri/ürün/seans ile aynı "drop-in" fikri: controller/UI bu sözleşmeyi
+/// (interface) hiç değiştirmeden çevrimdışı yazma yoluna geçer. Yalnız
+/// `recordSessionPayment` cihazda kuyruğa alınabilir; okuma + void/iade
+/// sunucu-otoriteli kalır (bkz. `sync_providers.dart` ->
+/// `offlinePaymentsRepositoryProvider`).
+final paymentsRepositoryProvider = Provider<PaymentsRepository>((ref) {
+  return ref.watch(offlinePaymentsRepositoryProvider);
 });
 
 final dashboardRemoteDataSourceProvider = Provider<DashboardRemoteDataSource>(

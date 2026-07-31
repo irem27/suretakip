@@ -3,6 +3,23 @@
 Bu liste her staging kabulü ve production yayını için kopyalanıp doldurulur.
 Tarih, sürüm ve sorumlu kişi yayın kaydına eklenir.
 
+## Depo hazırlığı (kod tarafında tamamlanan)
+
+Aşağıdakiler repoda hazırdır; kalan kutular çalışma zamanı/insan kararı gerektirir.
+
+- **Uygulama ikonu + açılış ekranı:** Marka logosu `assets/branding/` altında;
+  `flutter_launcher_icons` + `flutter_native_splash` ile Android (adaptive dahil)
+  ve iOS varlıkları üretildi. Yeniden üretim komutları `pubspec.yaml`'da.
+- **Android release imzalama:** `android/app/build.gradle.kts` keystore'u
+  `key.properties`/ortam değişkenlerinden okur; imzalı `app-release.aab` üretimi
+  doğrulandı. Production **keystore'un sahibi/yedeği yayıncıya aittir**.
+- **Şifre sıfırlama deep link:** `com.suretakip.app://reset-password` intent-filter,
+  `redirectTo` ve yeni şifre ekranı bağlı.
+- **Gizlilik politikası taslağı:** `docs/legal/privacy-policy-tr.md` (yayın öncesi
+  doldurulup herkese açık URL'de yayımlanmalı).
+- **Mağaza metinleri (TR taslağı):** `docs/store/store-listing-tr.md`.
+- **Test kapsamı:** el-yazımı kapsam %80 hedefine çıkarıldı; CI kapısı yükseltildi.
+
 ## Kullanıcı aksiyonu bekliyor
 
 - [ ] Production Android/iOS imzalama anahtarı ve erişim sorumlusu belirlendi;

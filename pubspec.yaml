@@ -31,6 +31,31 @@ dev_dependencies:
   freezed: ^3.2.5
   json_serializable: ^6.14.0
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.6
+
+# Uygulama ikonu: assets/branding/logo.png kaynağından üretilir.
+# Yeniden üretmek için: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/branding/logo.png"
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  adaptive_icon_background: "#1A237E"
+  adaptive_icon_foreground: "assets/branding/logo_foreground.png"
+  web:
+    generate: false
+
+# Açılış ekranı (splash). Üretmek için: dart run flutter_native_splash:create
+flutter_native_splash:
+  color: "#1A237E"
+  color_dark: "#0B0F40"
+  image: "assets/branding/splash.png"
+  android_12:
+    image: "assets/branding/splash.png"
+    color: "#1A237E"
+    color_dark: "#0B0F40"
+  fullscreen: true
 
 hooks:
   user_defines:

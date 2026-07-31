@@ -106,6 +106,14 @@ class _CustomerFormState extends ConsumerState<_CustomerForm> {
         _showMessage('Aktif işletme bulunamadı. Lütfen tekrar giriş yapın.');
         return;
       }
+      // Aynı ad-soyada sahip mevcut müşteri(ler) varsa, sessizce mükerrer
+      // kayıt oluşturmadan önce kullanıcıyı uyar (telefonla ayırt edilebilsin).
+      final duplicates = await _sameNameCustomers(_nameController.text.trim());
+      if (!mounted) return;
+      if (duplicates.isNotEmpty) {
+        final confirmed = await _confirmDuplicate(duplicates);
+        if (!mounted || !confirmed) return;
+      }
       result = await controller.create(
         CustomerInput(
           businessId: business.id,
@@ -139,6 +147,63 @@ class _CustomerFormState extends ConsumerState<_CustomerForm> {
   void _showMessage(String message) => ScaffoldMessenger.of(
     context,
   ).showSnackBar(SnackBar(content: Text(message)));
+
+  /// Aktif işletmenin yüklü müşteri listesinde, verilen adla (büyük/küçük harf
+  /// ve boşluk duyarsız) eşleşen aktif müşterileri döndürür.
+  Future<List<Customer>> _sameNameCustomers(String name) async {
+    final normalized = name.toLowerCase();
+    if (normalized.isEmpty) return const [];
+    // En iyi çaba: liste yüklenemezse (ağ/db hatası) mükerrer kontrolü atla;
+    // uyarı eksikliği kaydı ENGELLEMEMELİ.
+    try {
+      final scope = ref.read(activeBusinessScopeProvider);
+      final state = await ref.read(
+        customersListControllerProvider(scope).future,
+      );
+      return state.customers
+          .where((c) => c.isActive && c.name.trim().toLowerCase() == normalized)
+          .toList(growable: false);
+    } on Object {
+      return const [];
+    }
+  }
+
+  /// Mükerrer isim uyarısı: kullanıcı yine de kaydetmek isterse `true` döner.
+  Future<bool> _confirmDuplicate(List<Customer> duplicates) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Aynı isimde müşteri var'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Bu ad-soyada sahip müşteri(ler) zaten kayıtlı:'),
+            const SizedBox(height: 8),
+            ...duplicates.map(
+              (c) => Text(
+                '• ${c.name}'
+                '${c.phone == null ? ' (telefon yok)' : ' — ${c.phone}'}',
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text('Yine de yeni bir kayıt oluşturmak istiyor musunuz?'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Yine de kaydet'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
 
   @override
   Widget build(BuildContext context) {

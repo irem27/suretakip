@@ -23,6 +23,22 @@ export MAESTRO_PASSWORD="Test1234!"
 > kayıtlı ve onboarding'i tamamlanmış olması gerekir.
 
 ## Çalıştırma
+
+### iOS Simulator (önerilen — `run.sh`)
+iOS'ta Supabase oturumu **Keychain**'de tutulur ve maestro'nun `clearState`'i
+(hatta uninstall) bunu SİLMEZ. Tek `maestro test .maestro/` çağrısında ilk akış
+giriş yapınca sonraki akışlar giriş-yapılmış açılır ve login ekranı bekleyen
+akışlar düşer. Bu yüzden iOS'ta koşucu script kullanın — her akıştan önce
+keychain'i sıfırlayıp uygulamayı sonlandırarak her akışı temiz başlatır:
+
+```bash
+.maestro/run.sh                          # booted simulator'da tüm akışlar
+MAESTRO_DEVICE=<udid> .maestro/run.sh    # belirli cihaz
+.maestro/run.sh .maestro/02-login.yaml   # tek akış
+```
+
+### Android / tek akış
+Android'de `clearState` oturumu temizler; doğrudan maestro yeterli:
 ```bash
 maestro test .maestro/                 # tümü
 maestro test .maestro/01-smoke.yaml    # tek flow

@@ -47,9 +47,20 @@ appId: com.suretakip.app
     timeout: 8000
 - tapOn: "Ürün adı"
 - inputText: "Standart Ürün"
+# "Satış fiyatı" alanı klavyenin altında kalabilir; görünene kadar kaydır.
+- scrollUntilVisible:
+    element:
+      text: "Satış fiyatı.*"
+    direction: DOWN
+    timeout: 8000
 - tapOn:
     text: "Satış fiyatı.*"
 - inputText: "50"
+- scrollUntilVisible:
+    element:
+      text: "Kurulumu Tamamla"
+    direction: DOWN
+    timeout: 8000
 - tapOn: "Kurulumu Tamamla"
 
 # Kurulum bitti → Ana Sayfa

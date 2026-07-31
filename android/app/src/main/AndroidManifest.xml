@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Uygulamanın Supabase'e erişebilmesi için release dahil her build'de gerekli. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- connectivity_plus'ın bağlantı durumunu okuyabilmesi için gerekli;
+         eksikse release'de bağlantı yanlış "yok" görünüp senkron/UI'yı yanıltabilir. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@null"

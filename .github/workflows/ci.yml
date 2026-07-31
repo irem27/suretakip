@@ -54,12 +54,22 @@ jobs:
       # kaynak ölçülür. Bu dışlamayla güncel ölçüm %71,6'dır.
       - name: Enforce coverage floor
         env:
-          # 2026-07-31: Hedef %80'e ulaşıldı (ölçüm %80,4). Repository/controller/
-          # sync/widget test kümeleri eklendi. Eşik hedefe sabitlendi.
-          MIN_COVERAGE: "80"
+          # 2026-07-31: Hedef %90'a çıkarıldı (ölçüm %90,0). Sayfa/provider/
+          # router/sync/entity/error-mapper test kümeleri eklendi; drift tablo
+          # tanımları paydadan dışlandı (aşağıya bak). Eşik hedefe sabitlendi.
+          MIN_COVERAGE: "90"
         run: |
+          # Paydadan DIŞLANANLAR:
+          #  - *.g.dart / *.freezed.dart : kod üretici çıktısı, elle yazılmaz.
+          #  - core/database/tables/*.dart : Drift tablo tanımları. drift_dev,
+          #    elle yazılan `TextColumn get x => text()();` getter'larını üretilen
+          #    `$XyzTable` sınıfında `late final GeneratedColumn` alanıyla OVERRIDE
+          #    eder; orijinal getter gövdeleri çalışma zamanında HİÇ çağrılmaz
+          #    (yapısal olarak ölü kod). Ne kadar DB testi yazılırsa yazılsın bu
+          #    satırlar LH:0 kalır; ölçümü çarpıtmamaları için dışlanır.
           pct=$(awk -F: '
-                  /^SF:/ { gen = ($0 ~ /\.g\.dart$/ || $0 ~ /\.freezed\.dart$/) }
+                  /^SF:/ { gen = ($0 ~ /\.g\.dart$/ || $0 ~ /\.freezed\.dart$/ \
+                                  || $0 ~ /core\/database\/tables\//) }
                   /^DA:/ { if (!gen) { total++; if ($2 ~ /,[1-9]/) covered++ } }
                   END {if (total == 0) print "0";
                        else printf "%.1f", (covered / total) * 100}' \

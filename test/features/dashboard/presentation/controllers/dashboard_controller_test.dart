@@ -90,7 +90,7 @@ void main() {
     // ürettiği hata state'i) dispose ile iptal olmasın.
     final sub = container.listen(
       dashboardControllerProvider(_businessScope),
-      (_, __) {},
+      (_, _) {},
     );
     addTearDown(sub.close);
 

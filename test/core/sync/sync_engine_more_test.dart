@@ -213,91 +213,13 @@ void main() {
   );
 
   group('ürün/hizmet/ödeme RPC fabrikalarının tembel çözümlenmesi', () {
-    test(
-      'productRpc yapılandırılmadan createProduct dispatch edilirse '
-      'StateError yeniden denenebilir sayılır',
-      () async {
-        await enqueue(
-          operationId: 'op-1',
-          type: SyncOperationType.createProduct,
-          payload: const {'name': 'Ürün'},
-        );
-        final engine = SyncEngine(
-          outbox: outbox,
-          customerRpc: _UnusedCustomerApi(),
-          sessionRpc: _FakeSessionApi(),
-          sessionGuard: _FakeSessionGuard(),
-          clock: clock,
-          currentActorUserId: () => 'user-1',
-          currentBusinessId: () => 'biz-1',
-        );
-
-        final summary = await engine.push();
-
-        expect(summary.retried, 1);
-        final out = (await db.select(db.syncOutbox).get()).single;
-        expect(out.status, SyncStatus.retrying.wireName);
-      },
-    );
-
-    test(
-      'serviceRpc yapılandırılmadan createService dispatch edilirse '
-      'StateError yeniden denenebilir sayılır',
-      () async {
-        await enqueue(
-          operationId: 'op-1',
-          type: SyncOperationType.createService,
-          payload: const {'name': 'Hizmet'},
-        );
-        final engine = SyncEngine(
-          outbox: outbox,
-          customerRpc: _UnusedCustomerApi(),
-          sessionRpc: _FakeSessionApi(),
-          sessionGuard: _FakeSessionGuard(),
-          clock: clock,
-          currentActorUserId: () => 'user-1',
-          currentBusinessId: () => 'biz-1',
-        );
-
-        final summary = await engine.push();
-
-        expect(summary.retried, 1);
-      },
-    );
-
-    test(
-      'paymentRpc yapılandırılmadan recordSessionPayment dispatch edilirse '
-      'StateError yeniden denenebilir sayılır',
-      () async {
-        await enqueue(
-          operationId: 'op-1',
-          type: SyncOperationType.recordSessionPayment,
-          payload: const {'amount': 100},
-        );
-        final engine = SyncEngine(
-          outbox: outbox,
-          customerRpc: _UnusedCustomerApi(),
-          sessionRpc: _FakeSessionApi(),
-          sessionGuard: _FakeSessionGuard(),
-          clock: clock,
-          currentActorUserId: () => 'user-1',
-          currentBusinessId: () => 'biz-1',
-        );
-
-        final summary = await engine.push();
-
-        expect(summary.retried, 1);
-      },
-    );
-
-    test('productRpc fabrikası yalnız dispatch anında çağrılır ve başarır', () async {
+    test('productRpc yapılandırılmadan createProduct dispatch edilirse '
+        'StateError yeniden denenebilir sayılır', () async {
       await enqueue(
         operationId: 'op-1',
         type: SyncOperationType.createProduct,
         payload: const {'name': 'Ürün'},
       );
-      final productApi = _FakeProductApi();
-      var factoryCalls = 0;
       final engine = SyncEngine(
         outbox: outbox,
         customerRpc: _UnusedCustomerApi(),
@@ -306,17 +228,89 @@ void main() {
         clock: clock,
         currentActorUserId: () => 'user-1',
         currentBusinessId: () => 'biz-1',
-        productRpc: () {
-          factoryCalls++;
-          return productApi;
-        },
       );
 
       final summary = await engine.push();
 
-      expect(summary.pushed, 1);
-      expect(factoryCalls, 1);
+      expect(summary.retried, 1);
+      final out = (await db.select(db.syncOutbox).get()).single;
+      expect(out.status, SyncStatus.retrying.wireName);
     });
+
+    test('serviceRpc yapılandırılmadan createService dispatch edilirse '
+        'StateError yeniden denenebilir sayılır', () async {
+      await enqueue(
+        operationId: 'op-1',
+        type: SyncOperationType.createService,
+        payload: const {'name': 'Hizmet'},
+      );
+      final engine = SyncEngine(
+        outbox: outbox,
+        customerRpc: _UnusedCustomerApi(),
+        sessionRpc: _FakeSessionApi(),
+        sessionGuard: _FakeSessionGuard(),
+        clock: clock,
+        currentActorUserId: () => 'user-1',
+        currentBusinessId: () => 'biz-1',
+      );
+
+      final summary = await engine.push();
+
+      expect(summary.retried, 1);
+    });
+
+    test('paymentRpc yapılandırılmadan recordSessionPayment dispatch edilirse '
+        'StateError yeniden denenebilir sayılır', () async {
+      await enqueue(
+        operationId: 'op-1',
+        type: SyncOperationType.recordSessionPayment,
+        payload: const {'amount': 100},
+      );
+      final engine = SyncEngine(
+        outbox: outbox,
+        customerRpc: _UnusedCustomerApi(),
+        sessionRpc: _FakeSessionApi(),
+        sessionGuard: _FakeSessionGuard(),
+        clock: clock,
+        currentActorUserId: () => 'user-1',
+        currentBusinessId: () => 'biz-1',
+      );
+
+      final summary = await engine.push();
+
+      expect(summary.retried, 1);
+    });
+
+    test(
+      'productRpc fabrikası yalnız dispatch anında çağrılır ve başarır',
+      () async {
+        await enqueue(
+          operationId: 'op-1',
+          type: SyncOperationType.createProduct,
+          payload: const {'name': 'Ürün'},
+        );
+        final productApi = _FakeProductApi();
+        var factoryCalls = 0;
+        final engine = SyncEngine(
+          outbox: outbox,
+          customerRpc: _UnusedCustomerApi(),
+          sessionRpc: _FakeSessionApi(),
+          sessionGuard: _FakeSessionGuard(),
+          clock: clock,
+          currentActorUserId: () => 'user-1',
+          currentBusinessId: () => 'biz-1',
+          productRpc: () {
+            factoryCalls++;
+            return productApi;
+          },
+        );
+
+        final summary = await engine.push();
+
+        expect(summary.pushed, 1);
+        expect(factoryCalls, 1);
+      },
+    );
 
     test('serviceRpc fabrikası dispatch anında çağrılır ve başarır', () async {
       await enqueue(
@@ -364,45 +358,42 @@ void main() {
   });
 
   group('seans event dispatch yönlendirmesi', () {
-    test(
-      'pause/resume/addSessionProduct/complete/cancel tümü sessionEvent'
-      ' üzerinden gönderilir',
-      () async {
-        final sessionApi = _FakeSessionApi();
-        final types = [
-          SyncOperationType.pauseSession,
-          SyncOperationType.resumeSession,
-          SyncOperationType.addSessionProduct,
-          SyncOperationType.completeSession,
-          SyncOperationType.cancelSession,
-        ];
-        for (final type in types) {
-          await enqueue(
-            operationId: 'op-${type.wireName}',
-            type: type,
-            payload: {'kind': type.wireName},
-          );
-        }
-        final engine = SyncEngine(
-          outbox: outbox,
-          customerRpc: _UnusedCustomerApi(),
-          sessionRpc: sessionApi,
-          sessionGuard: _FakeSessionGuard(),
-          clock: clock,
-          currentActorUserId: () => 'user-1',
-          currentBusinessId: () => 'biz-1',
+    test('pause/resume/addSessionProduct/complete/cancel tümü sessionEvent'
+        ' üzerinden gönderilir', () async {
+      final sessionApi = _FakeSessionApi();
+      final types = [
+        SyncOperationType.pauseSession,
+        SyncOperationType.resumeSession,
+        SyncOperationType.addSessionProduct,
+        SyncOperationType.completeSession,
+        SyncOperationType.cancelSession,
+      ];
+      for (final type in types) {
+        await enqueue(
+          operationId: 'op-${type.wireName}',
+          type: type,
+          payload: {'kind': type.wireName},
         );
+      }
+      final engine = SyncEngine(
+        outbox: outbox,
+        customerRpc: _UnusedCustomerApi(),
+        sessionRpc: sessionApi,
+        sessionGuard: _FakeSessionGuard(),
+        clock: clock,
+        currentActorUserId: () => 'user-1',
+        currentBusinessId: () => 'biz-1',
+      );
 
-        final summary = await engine.push();
+      final summary = await engine.push();
 
-        expect(summary.pushed, types.length);
-        expect(sessionApi.calls, hasLength(types.length));
-        expect(
-          sessionApi.calls,
-          containsAll(types.map((t) => 'sessionEvent:${t.wireName}')),
-        );
-      },
-    );
+      expect(summary.pushed, types.length);
+      expect(sessionApi.calls, hasLength(types.length));
+      expect(
+        sessionApi.calls,
+        containsAll(types.map((t) => 'sessionEvent:${t.wireName}')),
+      );
+    });
   });
 
   group('oturum bekçisi geçici hata dalı', () {
@@ -520,9 +511,10 @@ void main() {
           clock: clock,
           currentActorUserId: () => 'user-1',
           currentBusinessId: () => 'biz-1',
-          productRpc: () => _FakeProductApi()
-            ..behavior = () =>
-                const SyncPushResult(type: SyncResultType.authRequired),
+          productRpc: () =>
+              _FakeProductApi()
+                ..behavior = () =>
+                    const SyncPushResult(type: SyncResultType.authRequired),
         );
 
         final summary = await engine.push();

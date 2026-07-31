@@ -35,14 +35,17 @@ void main() {
     expect(result.id, 'cached');
   });
 
-  test('önbellek boşken getBusiness sunucudan çeker ve önbelleğe yazar', () async {
-    remote.businesses = [_business('b1')];
+  test(
+    'önbellek boşken getBusiness sunucudan çeker ve önbelleğe yazar',
+    () async {
+      remote.businesses = [_business('b1')];
 
-    final result = await repo.getBusiness('b1');
+      final result = await repo.getBusiness('b1');
 
-    expect(result.id, 'b1');
-    expect((await local.getBusiness('b1'))?.id, 'b1');
-  });
+      expect(result.id, 'b1');
+      expect((await local.getBusiness('b1'))?.id, 'b1');
+    },
+  );
 
   test('önbellek boşken ağ hatası getBusiness için yükseltilir', () async {
     remote.throwNetwork = true;

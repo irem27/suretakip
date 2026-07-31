@@ -33,14 +33,17 @@ void main() {
     expect(result.id, 'cached');
   });
 
-  test('önbellek boşken getService sunucudan çeker ve önbelleğe yazar', () async {
-    remote.services = [_service('s1')];
+  test(
+    'önbellek boşken getService sunucudan çeker ve önbelleğe yazar',
+    () async {
+      remote.services = [_service('s1')];
 
-    final result = await repo.getService('s1');
+      final result = await repo.getService('s1');
 
-    expect(result.id, 's1');
-    expect((await local.getService('s1'))?.id, 's1');
-  });
+      expect(result.id, 's1');
+      expect((await local.getService('s1'))?.id, 's1');
+    },
+  );
 
   test('önbellek boşken ağ hatası getService için yükseltilir', () async {
     remote.throwNetwork = true;

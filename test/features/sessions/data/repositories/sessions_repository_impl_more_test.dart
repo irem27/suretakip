@@ -8,51 +8,48 @@ import 'package:suretakip/features/sessions/domain/entities/session_history_filt
 /// (toplu getiriciler, zaman/kalem gruplama, geçersiz enum değerleri, RPC
 /// dönüş değeri eşlemesi) kilitler.
 void main() {
-  test(
-    'getSessionsByIds boş liste verildiğinde bile veri kaynağını çağırır '
-    '(erken çıkış uygulanmaz)',
-    () async {
-      final dataSource = _FakeSessionsDataSource();
-      final repository = SessionsRepositoryImpl(dataSource);
-
-      final result = await repository.getSessionsByIds(
-        businessId: 'business-1',
-        sessionIds: const [],
-      );
-
-      expect(result.single.id, 'session-1');
-    },
-  );
-
-  test('getTimeEntriesForSessions kayıtları sessionId bazında gruplar', () async {
-    final dataSource = _FakeSessionsDataSource()
-      ..timeEntryRows = [
-        _timeEntryRow(sessionId: 'session-1'),
-        _timeEntryRow(sessionId: 'session-1'),
-        _timeEntryRow(sessionId: 'session-2'),
-      ];
+  test('getSessionsByIds boş liste verildiğinde bile veri kaynağını çağırır '
+      '(erken çıkış uygulanmaz)', () async {
+    final dataSource = _FakeSessionsDataSource();
     final repository = SessionsRepositoryImpl(dataSource);
 
-    final grouped = await repository.getTimeEntriesForSessions([
-      'session-1',
-      'session-2',
-    ]);
+    final result = await repository.getSessionsByIds(
+      businessId: 'business-1',
+      sessionIds: const [],
+    );
 
-    expect(grouped['session-1'], hasLength(2));
-    expect(grouped['session-2'], hasLength(1));
+    expect(result.single.id, 'session-1');
   });
 
   test(
-    'getTimeEntriesForSessions boş sessionIds için veri kaynağına sormadan '
-    'boş harita döner',
+    'getTimeEntriesForSessions kayıtları sessionId bazında gruplar',
     () async {
-      final repository = SessionsRepositoryImpl(_FakeSessionsDataSource());
+      final dataSource = _FakeSessionsDataSource()
+        ..timeEntryRows = [
+          _timeEntryRow(sessionId: 'session-1'),
+          _timeEntryRow(sessionId: 'session-1'),
+          _timeEntryRow(sessionId: 'session-2'),
+        ];
+      final repository = SessionsRepositoryImpl(dataSource);
 
-      final grouped = await repository.getTimeEntriesForSessions(const []);
+      final grouped = await repository.getTimeEntriesForSessions([
+        'session-1',
+        'session-2',
+      ]);
 
-      expect(grouped, isEmpty);
+      expect(grouped['session-1'], hasLength(2));
+      expect(grouped['session-2'], hasLength(1));
     },
   );
+
+  test('getTimeEntriesForSessions boş sessionIds için veri kaynağına sormadan '
+      'boş harita döner', () async {
+    final repository = SessionsRepositoryImpl(_FakeSessionsDataSource());
+
+    final grouped = await repository.getTimeEntriesForSessions(const []);
+
+    expect(grouped, isEmpty);
+  });
 
   test('getItemsForSessions kayıtları sessionId bazında gruplar', () async {
     final dataSource = _FakeSessionsDataSource()
@@ -70,39 +67,33 @@ void main() {
     expect(grouped.keys, containsAll(['session-1', 'session-2']));
   });
 
-  test(
-    'bilinmeyen işlem durumu ham FormatException yerine UnknownException '
-    'olarak dışa sızar (guard sarmalaması)',
-    () async {
-      final dataSource = _FakeSessionsDataSource()
-        ..sessionRowOverride =
-            (Map<String, dynamic>.from(_sessionRow)..['status'] = 'unknown_status');
-      final repository = SessionsRepositoryImpl(dataSource);
+  test('bilinmeyen işlem durumu ham FormatException yerine UnknownException '
+      'olarak dışa sızar (guard sarmalaması)', () async {
+    final dataSource = _FakeSessionsDataSource()
+      ..sessionRowOverride = (Map<String, dynamic>.from(_sessionRow)
+        ..['status'] = 'unknown_status');
+    final repository = SessionsRepositoryImpl(dataSource);
 
-      await expectLater(
-        repository.getSessions(businessId: 'business-1'),
-        throwsA(isA<UnknownException>()),
-      );
-    },
-  );
+    await expectLater(
+      repository.getSessions(businessId: 'business-1'),
+      throwsA(isA<UnknownException>()),
+    );
+  });
 
-  test(
-    'bilinmeyen zaman türü ham FormatException yerine UnknownException '
-    'olarak dışa sızar (guard sarmalaması)',
-    () async {
-      final dataSource = _FakeSessionsDataSource()
-        ..timeEntryRows = [
-          Map<String, dynamic>.from(_timeEntryRow(sessionId: 'session-1'))
-            ..['entry_type'] = 'unknown_type',
-        ];
-      final repository = SessionsRepositoryImpl(dataSource);
+  test('bilinmeyen zaman türü ham FormatException yerine UnknownException '
+      'olarak dışa sızar (guard sarmalaması)', () async {
+    final dataSource = _FakeSessionsDataSource()
+      ..timeEntryRows = [
+        Map<String, dynamic>.from(_timeEntryRow(sessionId: 'session-1'))
+          ..['entry_type'] = 'unknown_type',
+      ];
+    final repository = SessionsRepositoryImpl(dataSource);
 
-      await expectLater(
-        repository.getSessionTimeEntries('session-1'),
-        throwsA(isA<UnknownException>()),
-      );
-    },
-  );
+    await expectLater(
+      repository.getSessionTimeEntries('session-1'),
+      throwsA(isA<UnknownException>()),
+    );
+  });
 
   test('addProductToSession sonucu String olarak döner', () async {
     final repository = SessionsRepositoryImpl(_FakeSessionsDataSource());

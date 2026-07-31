@@ -29,11 +29,7 @@ void main() {
       result: _customer(name: 'Ayşe Yılmaz'),
     );
     Customer? popped;
-    await _pumpSheet(
-      tester,
-      controller,
-      onPopped: (value) => popped = value,
-    );
+    await _pumpSheet(tester, controller, onPopped: (value) => popped = value);
 
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Ad soyad'),
@@ -53,11 +49,7 @@ void main() {
       result: _customer(name: 'Can Demir'),
     );
     Customer? popped;
-    await _pumpSheet(
-      tester,
-      controller,
-      onPopped: (value) => popped = value,
-    );
+    await _pumpSheet(tester, controller, onPopped: (value) => popped = value);
 
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Ad soyad'),
@@ -107,9 +99,7 @@ void main() {
             generation: 0,
           )),
         ],
-        child: const MaterialApp(
-          home: Scaffold(body: QuickCustomerSheet()),
-        ),
+        child: const MaterialApp(home: Scaffold(body: QuickCustomerSheet())),
       ),
     );
     await tester.pump();
@@ -183,10 +173,7 @@ Customer _customer({required String name}) => Customer(
 );
 
 class _FakeCustomerFormController extends CustomerFormController {
-  _FakeCustomerFormController({
-    this.result,
-    this.loading = false,
-  });
+  _FakeCustomerFormController({this.result, this.loading = false});
 
   final Customer? result;
   final bool loading;

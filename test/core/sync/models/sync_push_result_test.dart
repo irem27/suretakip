@@ -89,12 +89,15 @@ void main() {
       expect(result.errorCode, 'UNKNOWN_RESULT');
     });
 
-    test('bilinmeyen result değeri rejected/UNKNOWN_RESULT olarak ele alınır', () {
-      final result = parseSyncResult({'result': 'future_contract'});
+    test(
+      'bilinmeyen result değeri rejected/UNKNOWN_RESULT olarak ele alınır',
+      () {
+        final result = parseSyncResult({'result': 'future_contract'});
 
-      expect(result.type, SyncResultType.rejected);
-      expect(result.errorCode, 'UNKNOWN_RESULT');
-    });
+        expect(result.type, SyncResultType.rejected);
+        expect(result.errorCode, 'UNKNOWN_RESULT');
+      },
+    );
 
     test('String gövde jsonDecode edilerek ayrıştırılır', () {
       final body = jsonEncode({'result': 'applied', 'server_version': 7});

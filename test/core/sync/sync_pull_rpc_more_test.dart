@@ -100,16 +100,19 @@ void main() {
       expect(page.ok, isFalse);
     });
 
-    test('herhangi bir ret merge/tombstone yapılmaması için rejected sayılır', () {
-      final page = parseCustomerSnapshotPage({
-        'result': 'rejected',
-        'error_code': 'FORBIDDEN',
-      });
+    test(
+      'herhangi bir ret merge/tombstone yapılmaması için rejected sayılır',
+      () {
+        final page = parseCustomerSnapshotPage({
+          'result': 'rejected',
+          'error_code': 'FORBIDDEN',
+        });
 
-      expect(page.ok, isFalse);
-      expect(page.authRequired, isFalse);
-      expect(page.customers, isEmpty);
-    });
+        expect(page.ok, isFalse);
+        expect(page.authRequired, isFalse);
+        expect(page.customers, isEmpty);
+      },
+    );
 
     test('ok zarfı müşteri alanlarını tam ayrıştırır', () {
       final page = parseCustomerSnapshotPage({

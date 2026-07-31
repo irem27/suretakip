@@ -29,14 +29,21 @@ void main() {
 
   tearDown(() => db.close());
 
-  test('oturum açık kullanıcı yokken createProduct StateError fırlatır', () async {
-    final repository = _repository(db: db, local: local, actorUserId: () => null);
+  test(
+    'oturum açık kullanıcı yokken createProduct StateError fırlatır',
+    () async {
+      final repository = _repository(
+        db: db,
+        local: local,
+        actorUserId: () => null,
+      );
 
-    await expectLater(
-      repository.createProduct(_input()),
-      throwsA(isA<StateError>()),
-    );
-  });
+      await expectLater(
+        repository.createProduct(_input()),
+        throwsA(isA<StateError>()),
+      );
+    },
+  );
 
   test('createProduct ürünü yerelde beklemede olarak kalıcı yazar', () async {
     final repository = _repository(db: db, local: local);
@@ -204,20 +211,20 @@ class _FakeProductsRemote implements ProductsRepository {
   }) async => products;
 
   @override
-  Future<Product> getProduct(String productId) =>
-      throw UnimplementedError();
+  Future<Product> getProduct(String productId) => throw UnimplementedError();
 
   @override
   Future<Product> createProduct(ProductInput input) =>
       throw UnimplementedError();
 
   @override
-  Future<Product> updateProduct(Product product) =>
-      throw UnimplementedError();
+  Future<Product> updateProduct(Product product) => throw UnimplementedError();
 
   @override
-  Future<Product> setProductActive(String productId, {required bool isActive}) =>
-      throw UnimplementedError();
+  Future<Product> setProductActive(
+    String productId, {
+    required bool isActive,
+  }) => throw UnimplementedError();
 
   @override
   Future<List<InventoryMovement>> getInventoryMovements({

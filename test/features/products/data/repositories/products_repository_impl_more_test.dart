@@ -26,17 +26,20 @@ void main() {
     expect(product.name, 'Kola');
   });
 
-  test('getInventoryMovements movement_type=sale_reversal doğru eşlenir', () async {
-    final dataSource = _FakeProductsDataSource()
-      ..movementRows = [_movementRow(movementType: 'sale_reversal')];
-    final repository = ProductsRepositoryImpl(dataSource);
+  test(
+    'getInventoryMovements movement_type=sale_reversal doğru eşlenir',
+    () async {
+      final dataSource = _FakeProductsDataSource()
+        ..movementRows = [_movementRow(movementType: 'sale_reversal')];
+      final repository = ProductsRepositoryImpl(dataSource);
 
-    final movements = await repository.getInventoryMovements(
-      businessId: 'business-1',
-    );
+      final movements = await repository.getInventoryMovements(
+        businessId: 'business-1',
+      );
 
-    expect(movements.single.movementType, InventoryMovementType.saleReversal);
-  });
+      expect(movements.single.movementType, InventoryMovementType.saleReversal);
+    },
+  );
 
   test(
     'getInventoryMovements movement_type=manual_adjustment doğru eşlenir',
@@ -56,26 +59,29 @@ void main() {
     },
   );
 
-  test('createInventoryMovement, sale_reversal türünü JSON\'a doğru yazar', () async {
-    final dataSource = _FakeProductsDataSource();
-    final repository = ProductsRepositoryImpl(dataSource);
+  test(
+    'createInventoryMovement, sale_reversal türünü JSON\'a doğru yazar',
+    () async {
+      final dataSource = _FakeProductsDataSource();
+      final repository = ProductsRepositoryImpl(dataSource);
 
-    await repository.createInventoryMovement(
-      InventoryMovement(
-        id: 'movement-1',
-        businessId: 'business-1',
-        productId: 'product-1',
-        sessionItemId: null,
-        movementType: InventoryMovementType.saleReversal,
-        quantityDelta: -1,
-        note: null,
-        createdByMemberId: null,
-        createdAt: DateTime.utc(2026),
-      ),
-    );
+      await repository.createInventoryMovement(
+        InventoryMovement(
+          id: 'movement-1',
+          businessId: 'business-1',
+          productId: 'product-1',
+          sessionItemId: null,
+          movementType: InventoryMovementType.saleReversal,
+          quantityDelta: -1,
+          note: null,
+          createdByMemberId: null,
+          createdAt: DateTime.utc(2026),
+        ),
+      );
 
-    expect(dataSource.insertedMovement?['movement_type'], 'sale_reversal');
-  });
+      expect(dataSource.insertedMovement?['movement_type'], 'sale_reversal');
+    },
+  );
 
   test(
     'createInventoryMovement, diğer türlerde enum adını olduğu gibi yazar',

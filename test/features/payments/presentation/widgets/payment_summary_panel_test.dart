@@ -63,11 +63,7 @@ void main() {
   ) async {
     final repository = _FakePaymentsRepository(_partialSummary);
     var collected = false;
-    await _pumpPanel(
-      tester,
-      repository,
-      onCollect: () => collected = true,
-    );
+    await _pumpPanel(tester, repository, onCollect: () => collected = true);
 
     await tester.tap(find.text('Ödeme Al'));
     await tester.pump();
@@ -177,10 +173,7 @@ void main() {
     await tester.tap(find.text('İade Et'));
     await tester.pump();
 
-    expect(
-      find.text('Tutar iade edilebilir bakiyeyi aşamaz.'),
-      findsOneWidget,
-    );
+    expect(find.text('Tutar iade edilebilir bakiyeyi aşamaz.'), findsOneWidget);
     expect(repository.refundCalls, 0);
   });
 

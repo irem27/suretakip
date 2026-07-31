@@ -27,14 +27,21 @@ void main() {
 
   tearDown(() => db.close());
 
-  test('oturum açık kullanıcı yokken createService StateError fırlatır', () async {
-    final repository = _repository(db: db, local: local, actorUserId: () => null);
+  test(
+    'oturum açık kullanıcı yokken createService StateError fırlatır',
+    () async {
+      final repository = _repository(
+        db: db,
+        local: local,
+        actorUserId: () => null,
+      );
 
-    await expectLater(
-      repository.createService(_input()),
-      throwsA(isA<StateError>()),
-    );
-  });
+      await expectLater(
+        repository.createService(_input()),
+        throwsA(isA<StateError>()),
+      );
+    },
+  );
 
   test('createService hizmeti yerelde beklemede olarak kalıcı yazar', () async {
     final repository = _repository(db: db, local: local);
@@ -172,12 +179,13 @@ class _FakeServicesRemote implements ServicesRepository {
       throw UnimplementedError();
 
   @override
-  Future<Service> updateService(Service service) =>
-      throw UnimplementedError();
+  Future<Service> updateService(Service service) => throw UnimplementedError();
 
   @override
-  Future<Service> setServiceActive(String serviceId, {required bool isActive}) =>
-      throw UnimplementedError();
+  Future<Service> setServiceActive(
+    String serviceId, {
+    required bool isActive,
+  }) => throw UnimplementedError();
 }
 
 class _AuthRequiredGuard implements SyncSessionGuard {

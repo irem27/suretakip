@@ -89,8 +89,10 @@ void main() {
 
     expect(range.contains(range.start), isTrue);
     expect(range.contains(range.endExclusive), isFalse);
-    expect(range.contains(range.start.subtract(const Duration(seconds: 1))),
-        isFalse);
+    expect(
+      range.contains(range.start.subtract(const Duration(seconds: 1))),
+      isFalse,
+    );
   });
 
   test('desteklenmeyen saat dilimi ArgumentError fırlatır', () {

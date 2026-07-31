@@ -35,14 +35,17 @@ void main() {
     expect(result.id, 'cached');
   });
 
-  test('önbellek boşken getProduct sunucudan çeker ve önbelleğe yazar', () async {
-    remote.products = [_product('p1')];
+  test(
+    'önbellek boşken getProduct sunucudan çeker ve önbelleğe yazar',
+    () async {
+      remote.products = [_product('p1')];
 
-    final result = await repo.getProduct('p1');
+      final result = await repo.getProduct('p1');
 
-    expect(result.id, 'p1');
-    expect((await local.getProduct('p1'))?.id, 'p1');
-  });
+      expect(result.id, 'p1');
+      expect((await local.getProduct('p1'))?.id, 'p1');
+    },
+  );
 
   test('önbellek boşken ağ hatası getProduct için yükseltilir', () async {
     remote.throwNetwork = true;

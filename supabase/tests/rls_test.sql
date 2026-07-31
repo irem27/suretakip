@@ -1401,5 +1401,23 @@ begin
   end if;
 end $$;
 
+-- ---------- 78: TAHSILATI OLAN seans iptal edilemez (finansal guard) ----------
+-- Regresyon: cancel_session / sync_session_event cancel dali, completed bir
+-- odemesi olan seansi iptal edip "iptal edilmis ama tahsil edilmis" muhasebe
+-- tutarsizligina yol aciyordu (odemelere hic dokunmadan). 20260731020000
+-- trigger'i bunu engeller: once void_payment ile tahsilat iptal edilmelidir.
+-- psess (b3) owner'i 6666...; psess'te pay_cash hala 'completed'.
+select set_config('request.jwt.claims','{"sub":"66666666-6666-6666-6666-666666666666","role":"authenticated"}', true);
+do $$ begin
+  perform public.cancel_session(current_setting('test.psess')::uuid);
+  raise exception 'FAIL 78: tahsilati olan seans iptal edilebildi!';
+exception when sqlstate 'P0001' then
+  if sqlerrm = 'session_has_active_payments' then
+    raise notice 'PASS 78: tahsilati olan seansin iptali engellendi (session_has_active_payments)';
+  else
+    raise exception 'FAIL 78: yanlis hata %', sqlerrm;
+  end if;
+end $$;
+
 rollback;
-\echo === 77/77 TEST TAMAMLANDI (rollback ile temiz birakildi) ===
+\echo === 78/78 TEST TAMAMLANDI (rollback ile temiz birakildi) ===

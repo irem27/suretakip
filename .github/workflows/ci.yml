@@ -54,7 +54,9 @@ jobs:
       # kaynak ölçülür. Bu dışlamayla güncel ölçüm %71,6'dır.
       - name: Enforce coverage floor
         env:
-          MIN_COVERAGE: "65"
+          # 2026-07-31: Hedef %80'e ulaşıldı (ölçüm %80,4). Repository/controller/
+          # sync/widget test kümeleri eklendi. Eşik hedefe sabitlendi.
+          MIN_COVERAGE: "80"
         run: |
           pct=$(awk -F: '
                   /^SF:/ { gen = ($0 ~ /\.g\.dart$/ || $0 ~ /\.freezed\.dart$/) }

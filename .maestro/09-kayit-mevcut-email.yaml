@@ -1,0 +1,36 @@
+# Negatif akış: zaten kayıtlı e-postayla kayıt olmaya çalışma.
+# Supabase anti-enumeration ile hata vermez; app "identities boş" durumunu
+# açık hataya çevirir → "Bu e-posta adresiyle bir hesap zaten var."
+appId: com.suretakip.app
+tags:
+  - auth
+---
+- runFlow: subflows/launch.yaml
+- tapOn: "Hesabınız yok mu? Kayıt olun"
+- scrollUntilVisible:
+    element:
+      text: "Kayıt Ol"
+    direction: DOWN
+    timeout: 10000
+- tapOn: "E-posta"
+# Zaten kayıtlı hesap (onboarding testlerinden mevcut)
+- inputText: "test@suretakip.com"
+- tapOn: "Şifre"
+- inputText: "Test1234!"
+- tapOn: "Şifre tekrarı"
+- inputText: "Test1234!"
+- scrollUntilVisible:
+    element:
+      text: "Kayıt Ol"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    text: "Kayıt Ol"
+    index: 0
+# Zaten kayıtlı e-posta uyarısı beklenir; Ana Sayfa'ya GİRİLMEMELİ
+- extendedWaitUntil:
+    visible:
+      text: ".*zaten (var|kayıtlı).*"
+    timeout: 15000
+- assertNotVisible: "Ana Sayfa"
+- takeScreenshot: kayit-mevcut-email

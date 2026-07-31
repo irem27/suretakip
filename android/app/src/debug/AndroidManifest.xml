@@ -4,4 +4,7 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Yalnız debug/test: yerel Supabase (http://LAN-IP:54321) düz-metin HTTP
+         üzerinden erişilir. Release build'lerde cleartext AÇILMAZ. -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>

@@ -1,0 +1,170 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  flutter:
+    name: Flutter quality gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+
+      - name: Test with coverage
+        run: flutter test --coverage
+
+      # Kapsam kapısı bir "ratchet"tir: hedef %80, ama bugünkü seviyenin
+      # altına düşmeyi engeller. Kapsam arttıkça MIN_COVERAGE yükseltilmeli.
+      #
+      # 2026-07-18 (1): Eşik bir ara 45'e YENİDEN TABANLANDI — gevşetme değil,
+      # ölçüm tabanı değişti. Router testi app_router.dart üzerinden tüm sayfaları
+      # transitif olarak import edince, daha önce lcov'da hiç görünmeyen ~950 satır
+      # test edilmemiş UI kodu ölçüme dahil oldu (paydada 3274 -> 4230).
+      # Kapsanan satır AZALMADI, arttı (1904 -> 2030); yalnızca oran dürüstleşti.
+      #
+      # 2026-07-18 (2): Test paketi genişletildikten sonra eşik 65'e YÜKSELTİLDİ.
+      #
+      # 2026-07-22: Kod üretici (drift `*.g.dart`, freezed `*.freezed.dart`)
+      # dosyaları paydadan DIŞLANDI. Offline şeması büyüyünce `app_database.g.dart`
+      # ~3900 satıra çıkıp elle yazılmayan üretilmiş kodla oranı yapay olarak
+      # düşürüyordu (%56,5). Üretilmiş kod test edilmez; yalnızca elle yazılan
+      # kaynak ölçülür. Bu dışlamayla güncel ölçüm %71,6'dır.
+      - name: Enforce coverage floor
+        env:
+          MIN_COVERAGE: "65"
+        run: |
+          pct=$(awk -F: '
+                  /^SF:/ { gen = ($0 ~ /\.g\.dart$/ || $0 ~ /\.freezed\.dart$/) }
+                  /^DA:/ { if (!gen) { total++; if ($2 ~ /,[1-9]/) covered++ } }
+                  END {if (total == 0) print "0";
+                       else printf "%.1f", (covered / total) * 100}' \
+                coverage/lcov.info)
+          echo "Satır kapsamı: %$pct (alt sınır: %$MIN_COVERAGE, hedef: %80)"
+          if ! awk -v p="$pct" -v m="$MIN_COVERAGE" 'BEGIN { exit !(p + 0 >= m + 0) }'; then
+            echo "::error::Satır kapsamı %$pct, alt sınır %$MIN_COVERAGE altında."
+            exit 1
+          fi
+
+  # Analyze/test yeşil olsa bile derleme kırılabilir (Gradle yapılandırması,
+  # manifest, plugin uyumu). Bu iş en az bir hedefin gerçekten derlendiğini
+  # kanıtlar. Android SDK yerel makinede kurulu olmadığı için release imzalama
+  # yapılandırmasını doğrulayan tek yer burasıdır.
+  build:
+    name: Android build doğrulama
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Gerçek Supabase değerleri gerekmez; derleme yalnızca --dart-define
+      # anahtarlarının varlığını umursar. Sır kullanılmaz.
+      - name: Build debug APK
+        run: |
+          flutter build apk --debug \
+            --dart-define=SUPABASE_URL=https://ci.example.supabase.co \
+            --dart-define=SUPABASE_ANON_KEY=ci-placeholder-anon-key
+
+  ios-build:
+    name: iOS build doğrulama
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS without codesigning
+        run: |
+          flutter build ios --debug --no-codesign \
+            --dart-define=SUPABASE_URL=https://ci.example.supabase.co \
+            --dart-define=SUPABASE_ANON_KEY=ci-placeholder-anon-key
+
+  migrations:
+    name: Supabase migrations + RLS/RPC test suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          # config.toml'u üreten yerel CLI sürümüyle AYNI olmalı. 2.101.0 ile
+          # CI kırıldı: '[local_smtp]' anahtarı o sürümde yok (eski adı
+          # '[inbucket]'). Sürümü tahmin etme — `supabase --version` ile doğrula.
+          version: 2.109.1
+
+      # Ubuntu runner Docker içerir. CLI kendi yerel Postgres konteynerini
+      # başlattığı için ayrı bir service container veya uzak proje/.env gerekmez.
+      - name: Start local database
+        run: supabase db start
+
+      - name: Reset database and apply every migration
+        run: supabase db reset --local --no-seed
+
+      # Tenant izolasyonu, rol matrisi, seans durum makinesi, stok ledger'ı,
+      # onboarding atomikliği ve rapor aggregate'lerini doğrular. Script
+      # `\set ON_ERROR_STOP on` kullanır: bir FAIL psql'i sıfırdan farklı
+      # kodla sonlandırır ve iş akışını kırar.
+      - name: Run RLS/RPC test suite
+        run: |
+          container="$(docker ps -qf name=supabase_db_)"
+          if [ -z "$container" ]; then
+            echo "Supabase DB container bulunamadı" >&2
+            exit 1
+          fi
+          docker exec -i "$container" \
+            psql -U postgres -d postgres -q < supabase/tests/rls_test.sql
+          docker exec -i "$container" \
+            psql -U postgres -d postgres -q < supabase/tests/create_customer_test.sql
+          docker exec -i "$container" \
+            psql -U postgres -d postgres -q < supabase/tests/offline_session_test.sql
+          docker exec -i "$container" psql -U postgres -d postgres -q < supabase/tests/sync_delta_test.sql
+          bash supabase/tests/payment_concurrency_test.sh

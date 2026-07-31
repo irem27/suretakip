@@ -1,0 +1,11 @@
+# Maestro proje ayarları — SüreTakip
+# Çalıştırma: maestro test .maestro/           (tüm flow'lar)
+#            maestro test .maestro/smoke.yaml  (tek flow)
+flows:
+  - "*.yaml"
+# Ortak alt-akışlar tek başına koşmasın:
+  - "!subflows/*"
+
+# Test kimlik bilgileri ortam değişkeninden gelir (koda gömme):
+#   export MAESTRO_EMAIL="test@suretakip.com"
+#   export MAESTRO_PASSWORD="Test1234!"

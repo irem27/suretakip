@@ -1,5 +1,11 @@
 # Menü Sayaç - Genel Mimari
 
+> **Güncelleme (2026-07-17):** Veri katmanı production modeline (v2) geçirildi.
+> Değişenler: para artık kuruş bazlı `bigint` (`*_minor`), roller `owner/admin/staff`,
+> zaman takibi `session_time_entries` ledger'ı, stok `inventory_movements` ledger'ı,
+> seans yaşam döngüsü yalnızca RPC üzerinden. Detay: [database-design.md](database-design.md).
+> Bu dokümanda güncellenen bölümler "(güncellendi: 2026-07-17)" ile işaretlidir.
+
 Bu doküman, projeyi iki veya daha fazla geliştirici ile tutarlı şekilde ilerletmek için temel mimari kararları ve çalışma kurallarını tanımlar.
 
 ## 1) Mimari Yaklaşım
@@ -19,10 +25,11 @@ Proje, **feature-first** ve **clean architecture** prensipleri ile ilerler.
 - Riverpod
 - GoRouter
 - Supabase (Auth + Realtime + PostgreSQL)
+- Drift (offline local database + outbox)
 - Freezed + json_serializable
 - uuid
 - intl
-- flutter_dotenv
+- `--dart-define-from-file` ile build-time ortam yapılandırması
 
 ## 3) Klasör Yapısı
 
@@ -152,11 +159,15 @@ Kural:
 
 ## 8) Modelleme Kuralları
 
+(güncellendi: 2026-07-17)
+
 - Domain entity ve modelde immutable yaklaşım.
 - Freezed + json_serializable standartları uygulanır.
-- ID tipleri UUID.
-- Fiyat alanları PostgreSQL tarafında `numeric(12,2)`.
-- Dart tarafında para hesapları merkezi utility/value object ile yapılır.
+- ID tipleri UUID (`gen_random_uuid()`).
+- Para alanları PostgreSQL tarafında en küçük birim (kuruş) `bigint` olarak tutulur
+  (`unit_price_minor`, `grand_total_minor` vb.); her para snapshot'ında ISO 4217
+  `currency_code` bulunur. ~~`numeric(12,2)`~~ kullanımı kaldırıldı.
+- Dart tarafında para hesapları merkezi value object ile yapılır (int minor bazlı).
 
 ## 9) İş Kuralı Yerleşimi
 
@@ -167,10 +178,40 @@ Kural:
 
 ## 10) Supabase ve SQL Sınırları
 
-- Tablolar: businesses, business_members, customers, services, products, sessions, session_items.
-- RLS tüm tablolarda aktif.
-- Yetki kontrolü business üyeliği üzerinden yapılır.
-- Kritik tamamla işlemleri (stok düşümü + toplam kaydı) atomik şekilde RPC/transaction ile yapılır.
+(güncellendi: 2026-07-17)
+
+- Tablolar: businesses, business_members, customers, services, products, sessions,
+  session_time_entries, session_items, inventory_movements,
+  **payments, payment_allocations, payment_events** *(2026-07-19)*.
+- Roller: `owner / admin / staff` (~~manager/employee~~ adlandırması kaldırıldı).
+- RLS tüm tenant tablolarında aktif; yetki kontrolü business üyeliği üzerinden
+  `security definer` helper fonksiyonlarla yapılır.
+- Seans yaşam döngüsü yalnızca RPC'lerle yürür (start/pause/resume/add_product/
+  complete/cancel_session) — tümü tek transaction, FOR UPDATE kilitli.
+- Stok: append-only `inventory_movements` ledger'ı kaynak; `products.stock_quantity`
+  trigger'ın güncellediği cache.
+- **Ödeme** *(2026-07-19)*: satış tutarı (`sessions.grand_total_minor`) ile tahsilat
+  (`payments`) **ayrı** kavramlardır; tamamlanmış seans ödenmiş demek değildir.
+  Ödeme durumu saklanmaz, `payment_allocations` üzerinden **türetilir**.
+  Yazma yalnızca RPC'lerle (`record_session_payment`, `void_payment`,
+  `refund_payment`); üç ödeme tablosuna hiçbir role insert/update/delete
+  grant'i verilmez, RLS'te yalnızca SELECT politikası vardır (fail-closed).
+  Kayıt fiziksel silinmez: iptal durum değişimi, iade yeni kayıttır.
+  Ayrıntı: `docs/contracts/payment-contract.md`, gerekçe: ADR 0002.
+- Bu maddelerin tamamı `supabase/migrations/` altında uygulanmış durumdadır.
+
+## 10.1) Offline-first sınırı (güncellendi: 2026-07-23)
+
+- Offline uygulama sözleşmesinin tek kaynağı
+  [`offline-first-contract.md`](offline-first-contract.md) dosyasıdır.
+- UI mutation'ları local repository'ye gider; domain kaydı ve outbox aynı
+  Drift transaction'inda yazılır.
+- Seans `start/pause/resume/add_product/complete/cancel` olayları offline
+  kaydedilir; sunucu stok ve finans sonuçlarını idempotent RPC'de doğrular.
+- Sync RPC'leri idempotent'tir; auth/ağ hatası pending veriyi silmez.
+- `processing` outbox kayıtları lease aşımında kurtarılır.
+- SQLCipher, secure storage ve yerel PIN tamamlanana kadar offline taşıma
+  altyapısı son kullanıcıya güvenli offline login olarak sunulmaz.
 
 ## 11) Kodlama Standartları
 
@@ -213,7 +254,7 @@ Her PR için minimum gereksinim:
 
 Bu dokümandan sonra ekip olarak şu sırayla ilerlenir:
 
-1. Supabase migration + RLS dosyaları
+1. ~~Supabase migration + RLS dosyaları~~ ✅ Tamamlandı (2026-07-17, `supabase/migrations/` + 20 senaryoluk test paketi)
 2. Domain entity/model ve repository kontratları
 3. Services CRUD
 4. Products CRUD

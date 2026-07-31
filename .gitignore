@@ -31,10 +31,19 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+# build bir symlink olabilir; slash'sız kural symlink'i de yakalar
+/build
 /coverage/
 .env
 .env.*
 !.env.example
+
+# Android release imzalama sırları — ASLA commit edilmez
+key.properties
+android/key.properties
+*.jks
+*.keystore
+!android/key.properties.example
 
 # Symbolication related
 app.*.symbols
@@ -46,3 +55,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local agent tooling runs
+.projectforge/
+
+# Derlenmiş APK çıktıları git'e girmez
+*.apk

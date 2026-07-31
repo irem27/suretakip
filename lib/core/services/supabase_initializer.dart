@@ -1,24 +1,38 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:menusayac/core/constants/app_constants.dart';
+import 'package:suretakip/core/constants/app_constants.dart';
+import 'package:suretakip/core/security/secure_auth_storage.dart';
 
 class SupabaseInitializer {
+  // Derleme zamanı sabitleri: `--dart-define` / `--dart-define-from-file` ile verilir.
+  static const _supabaseUrl = String.fromEnvironment(
+    AppConstants.supabaseUrlEnvKey,
+  );
+  static const _supabaseAnonKey = String.fromEnvironment(
+    AppConstants.supabaseAnonKeyEnvKey,
+  );
+
   static Future<void> initialize() async {
-    final supabaseUrl =
-        dotenv.env[AppConstants.supabaseUrlEnvKey]?.trim() ?? '';
-    final supabaseAnonKey =
-        dotenv.env[AppConstants.supabaseAnonKeyEnvKey]?.trim() ?? '';
+    final supabaseUrl = _supabaseUrl.trim();
+    final supabaseAnonKey = _supabaseAnonKey.trim();
 
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
       throw StateError(
-        'SUPABASE_URL ve SUPABASE_ANON_KEY değerleri .env dosyasında tanımlı olmalı.',
+        'SUPABASE_URL ve SUPABASE_ANON_KEY tanımlı değil. '
+        'Uygulamayı `--dart-define-from-file=.env.staging` veya '
+        '`.env.production` ile çalıştırın (bkz. README).',
       );
     }
 
     await Supabase.initialize(
       url: supabaseUrl,
       publishableKey: supabaseAnonKey,
+      // Oturum belirteçleri ve PKCE verifier düz metin SharedPreferences yerine
+      // Keystore/Keychain'de şifreli tutulur (bkz. secure_auth_storage.dart).
+      authOptions: const FlutterAuthClientOptions(
+        localStorage: SecureSupabaseLocalStorage(),
+        pkceAsyncStorage: SecureGotrueAsyncStorage(),
+      ),
     );
   }
 

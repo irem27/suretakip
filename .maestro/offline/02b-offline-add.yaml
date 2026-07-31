@@ -1,0 +1,21 @@
+# Offline SENARYO B — bölüm 2/2: internet KESİLDİKTEN sonra çevrimdışı ekle.
+# launchApp/clearState YOK — 02a'nın bıraktığı çalışan oturumu sürdürür.
+# Uygulama Müşteriler ekranındayken çevrimdışı bir müşteri ekler; offline-first
+# yerel yazımı anında görünür olmalı.
+appId: com.suretakip.app
+env:
+  OFFLINE_CUSTOMER: "Offline Kesinti Musteri"
+---
+- assertVisible: "Müşteriler"
+- tapOn: "Yeni Müşteri"
+- extendedWaitUntil:
+    visible: "Ad soyad"
+    timeout: 10000
+- tapOn: "Ad soyad"
+- inputText: ${OFFLINE_CUSTOMER}
+- tapOn: "Yeni Müşteri"
+- tapOn: "Müşteriyi Kaydet"
+- extendedWaitUntil:
+    visible: "${OFFLINE_CUSTOMER}|Müşteri Detayı"
+    timeout: 15000
+- takeScreenshot: offline-cut-customer-added

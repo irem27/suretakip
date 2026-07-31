@@ -1,0 +1,18 @@
+# Bu dosyayı android/key.properties adıyla kopyalayıp gerçek değerleri girin.
+# key.properties gitignore'dadır ve ASLA commit edilmemelidir.
+#
+# Keystore oluşturma:
+#   keytool -genkey -v -keystore ~/suretakip-release.jks \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias suretakip
+#
+# CI'da bu dosya yerine ortam değişkenleri kullanılır (öncelikli):
+#   ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD,
+#   ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+#
+# UYARI: Keystore dosyasını ve parolalarını kaybederseniz uygulamanın
+# mevcut Play Store kaydına güncelleme yayınlayamazsınız. Yedekleyin.
+
+storeFile=/Users/kullanici/suretakip-release.jks
+storePassword=keystore-parolasi
+keyAlias=suretakip
+keyPassword=anahtar-parolasi

@@ -1,0 +1,58 @@
+# Alt-akış: İşletme Kurulumu (onboarding) sihirbazını uçtan uca doldurur.
+# Yeni hesaplar login sonrası buraya düşer; işletme + hizmet + ürün kurup
+# Ana Sayfa'ya geçirir. Gerçek E2E: DB seed yok, kullanıcı gibi doldurur.
+#
+# NOT: Flutter Stepper başlıkları ("Para birimi"/"Saat dilimi") accessibility
+# ağacına düşmüyor. Bu yüzden yalnız alan hint'leri (İşletme adı, Hizmet adı,
+# Ürün adı ...) ve buton metinleri ("Devam Et"/"Kurulumu Tamamla") hedeflenir.
+# Dropdown adımlarının varsayılanları (TRY / Europe/Istanbul) dolu geldiğinden
+# o adımlarda sadece ilerlemek yeterli.
+appId: com.suretakip.app
+---
+- assertVisible: "İşletme Kurulumu"
+
+# Adım 1/5 — İşletme adı (alan hint="İşletme adı")
+- tapOn: "İşletme adı"
+- inputText: "Test İşletme"
+- tapOn: "Devam Et"
+- waitForAnimationToEnd
+
+# Adım 2/5 — Para birimi (varsayılan TRY) → ilerle
+- tapOn: "Devam Et"
+- waitForAnimationToEnd
+
+# Adım 3/5 — Saat dilimi (varsayılan Europe/Istanbul) → ilerle
+- tapOn: "Devam Et"
+- waitForAnimationToEnd
+
+# Adım 4/5 — İlk hizmet (zorunlu)
+- extendedWaitUntil:
+    visible: "Hizmet adı"
+    timeout: 10000
+- tapOn: "Hizmet adı"
+- inputText: "Standart Hizmet"
+- tapOn:
+    text: "Dakika ücreti.*"
+- inputText: "10"
+- tapOn: "Devam Et"
+- waitForAnimationToEnd
+
+# Adım 5/5 — İlk ürün (opsiyonel; testte ekliyoruz)
+- extendedWaitUntil:
+    visible: "Şimdi bir ürün ekle"
+    timeout: 10000
+- tapOn: "Şimdi bir ürün ekle"
+- extendedWaitUntil:
+    visible: "Ürün adı"
+    timeout: 8000
+- tapOn: "Ürün adı"
+- inputText: "Standart Ürün"
+- tapOn:
+    text: "Satış fiyatı.*"
+- inputText: "50"
+- tapOn: "Kurulumu Tamamla"
+
+# Kurulum bitti → Ana Sayfa
+- extendedWaitUntil:
+    visible: "Ana Sayfa"
+    timeout: 20000

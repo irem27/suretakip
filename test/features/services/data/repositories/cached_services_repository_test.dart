@@ -20,10 +20,7 @@ void main() {
     db = AppDatabase.forExecutor(NativeDatabase.memory());
     remote = _FakeRemote();
     local = ServicesLocalDataSource(db);
-    repo = CachedServicesRepository(
-      remote: remote,
-      local: local,
-    );
+    repo = CachedServicesRepository(remote: remote, local: local);
   });
 
   tearDown(() => db.close());
@@ -65,7 +62,10 @@ void main() {
     expect(activeOnly.map((s) => s.id), ['s1']); // filtre uygulanır
 
     // Ama tam katalog (pasif dahil) önbelleğe yazılmış olmalı.
-    final all = await local.getServices(businessId: 'b1', includeInactive: true);
+    final all = await local.getServices(
+      businessId: 'b1',
+      includeInactive: true,
+    );
     expect(all.map((s) => s.id), containsAll(['s1', 's2']));
   });
 }
@@ -107,12 +107,15 @@ class _FakeRemote implements ServicesRepository {
   }
 
   @override
-  Future<Service> createService(ServiceInput input) => throw UnimplementedError();
+  Future<Service> createService(ServiceInput input) =>
+      throw UnimplementedError();
 
   @override
   Future<Service> updateService(Service service) => throw UnimplementedError();
 
   @override
-  Future<Service> setServiceActive(String serviceId, {required bool isActive}) =>
-      throw UnimplementedError();
+  Future<Service> setServiceActive(
+    String serviceId, {
+    required bool isActive,
+  }) => throw UnimplementedError();
 }

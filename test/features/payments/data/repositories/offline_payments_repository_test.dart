@@ -119,9 +119,9 @@ void main() {
       expect(ops.single.idempotencyKey, 'idem-1');
       // Seansın kendi (start) op'una bağımlı: seans sunucuda oluşmadan
       // ödeme gönderilemez.
-      final sessionOp = (await (db.select(db.syncOutbox)..where(
-                (t) => t.operationType.equals('startSession'),
-              ))
+      final sessionOp =
+          (await (db.select(db.syncOutbox)
+                ..where((t) => t.operationType.equals('startSession')))
               .getSingleOrNull());
       // Bu testte seans doğrudan yerel yazıldığı için outbox'ta start op'u
       // yok; dependsOnOperationId bu durumda null kalmalı (zincir kırılmaz).
@@ -130,47 +130,47 @@ void main() {
     },
   );
 
-  test(
-    'aynı idempotency key ile tekrar deneme İKİNCİ outbox kaydı AÇMAZ '
-    '(çift-tahsilat koruması)',
-    () async {
-      remote.throwNetworkError = true;
-
-      await expectLater(
-        repo.recordSessionPayment(paymentInput),
-        throwsA(isA<NetworkException>()),
-      );
-      await expectLater(
-        repo.recordSessionPayment(paymentInput),
-        throwsA(isA<NetworkException>()),
-      );
-
-      final ops = await db.select(db.syncOutbox).get();
-      expect(ops, hasLength(1));
-    },
-  );
-
-  test('push sonrası ödeme senkronize olur ve doğru payload gönderilir', () async {
+  test('aynı idempotency key ile tekrar deneme İKİNCİ outbox kaydı AÇMAZ '
+      '(çift-tahsilat koruması)', () async {
     remote.throwNetworkError = true;
+
+    await expectLater(
+      repo.recordSessionPayment(paymentInput),
+      throwsA(isA<NetworkException>()),
+    );
     await expectLater(
       repo.recordSessionPayment(paymentInput),
       throwsA(isA<NetworkException>()),
     );
 
-    final summary = await engine.push();
-
-    expect(summary.pushed, 1);
-    expect(paymentApi.calls, hasLength(1));
-    final payload = paymentApi.calls.single;
-    expect(payload['session_id'], 'session-1');
-    expect(payload['amount_minor'], 5000);
-    expect(payload['payment_method'], 'cash');
-    final op = (await db.select(db.syncOutbox).get()).single;
-    expect(op.status, SyncStatus.synced.wireName);
-    // Seans (aggregate) durumu senkronize kalmalı: yalnızca bu op vardı.
-    final session = (await db.select(db.localSessions).get()).single;
-    expect(session.syncStatus, SyncStatus.synced.wireName);
+    final ops = await db.select(db.syncOutbox).get();
+    expect(ops, hasLength(1));
   });
+
+  test(
+    'push sonrası ödeme senkronize olur ve doğru payload gönderilir',
+    () async {
+      remote.throwNetworkError = true;
+      await expectLater(
+        repo.recordSessionPayment(paymentInput),
+        throwsA(isA<NetworkException>()),
+      );
+
+      final summary = await engine.push();
+
+      expect(summary.pushed, 1);
+      expect(paymentApi.calls, hasLength(1));
+      final payload = paymentApi.calls.single;
+      expect(payload['session_id'], 'session-1');
+      expect(payload['amount_minor'], 5000);
+      expect(payload['payment_method'], 'cash');
+      final op = (await db.select(db.syncOutbox).get()).single;
+      expect(op.status, SyncStatus.synced.wireName);
+      // Seans (aggregate) durumu senkronize kalmalı: yalnızca bu op vardı.
+      final session = (await db.select(db.localSessions).get()).single;
+      expect(session.syncStatus, SyncStatus.synced.wireName);
+    },
+  );
 }
 
 class _FakeRemotePayments implements PaymentsRepository {
@@ -178,9 +178,7 @@ class _FakeRemotePayments implements PaymentsRepository {
   final calls = <PaymentInput>[];
 
   @override
-  Future<PaymentMutationResult> recordSessionPayment(
-    PaymentInput input,
-  ) async {
+  Future<PaymentMutationResult> recordSessionPayment(PaymentInput input) async {
     calls.add(input);
     if (throwNetworkError) {
       throw const NetworkException(NetworkException.offlineMessage);

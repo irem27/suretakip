@@ -193,12 +193,13 @@ class _UnusedProductsRemoteRepository implements ProductsRepository {
       throw UnimplementedError();
 
   @override
-  Future<Product> updateProduct(Product product) =>
-      throw UnimplementedError();
+  Future<Product> updateProduct(Product product) => throw UnimplementedError();
 
   @override
-  Future<Product> setProductActive(String productId, {required bool isActive}) =>
-      throw UnimplementedError();
+  Future<Product> setProductActive(
+    String productId, {
+    required bool isActive,
+  }) => throw UnimplementedError();
 
   @override
   Future<List<InventoryMovement>> getInventoryMovements({
@@ -302,16 +303,21 @@ void main() {
     expect(row?.serverVersion, 1);
   });
 
-  test('sync başarısızlığı (offline) çağıranı düşürmez, kayıt korunur', () async {
-    final api = _FakeProductApi([() => throw const SocketException('offline')]);
-    final repo = buildRepo(buildEngine(api));
+  test(
+    'sync başarısızlığı (offline) çağıranı düşürmez, kayıt korunur',
+    () async {
+      final api = _FakeProductApi([
+        () => throw const SocketException('offline'),
+      ]);
+      final repo = buildRepo(buildEngine(api));
 
-    final product = await repo.createProduct(_input);
+      final product = await repo.createProduct(_input);
 
-    final row = await local.findProductRow(product.id);
-    expect(row?.syncStatus, SyncStatus.pending.wireName);
-    expect(product.name, 'Şampuan');
-  });
+      final row = await local.findProductRow(product.id);
+      expect(row?.syncStatus, SyncStatus.pending.wireName);
+      expect(product.name, 'Şampuan');
+    },
+  );
 
   group('offline update ve setActive', () {
     Future<Product> seedProduct(String id, {int serverVersion = 3}) async {
@@ -334,45 +340,51 @@ void main() {
       return (await local.getProduct(id))!;
     }
 
-    test('offline güncelleme yerelde pending yazar ve outbox oluşturur', () async {
-      final product = await seedProduct('product-1');
-      final api = _FakeProductApi([_applied]);
-      final repo = buildRepo(
-        buildEngine(api, sessionProblem: SyncResultType.authRequired),
-      );
+    test(
+      'offline güncelleme yerelde pending yazar ve outbox oluşturur',
+      () async {
+        final product = await seedProduct('product-1');
+        final api = _FakeProductApi([_applied]);
+        final repo = buildRepo(
+          buildEngine(api, sessionProblem: SyncResultType.authRequired),
+        );
 
-      final updated = await repo.updateProduct(
-        product.copyWith(name: 'Güncel Şampuan'),
-      );
+        final updated = await repo.updateProduct(
+          product.copyWith(name: 'Güncel Şampuan'),
+        );
 
-      expect(updated.name, 'Güncel Şampuan');
-      final row = await local.findProductRow('product-1');
-      expect(row?.syncStatus, SyncStatus.pending.wireName);
-      final outboxRows = await db.select(db.syncOutbox).get();
-      expect(outboxRows.single.operationType, 'updateProduct');
-      expect(outboxRows.single.expectedServerVersion, 3);
-    });
+        expect(updated.name, 'Güncel Şampuan');
+        final row = await local.findProductRow('product-1');
+        expect(row?.syncStatus, SyncStatus.pending.wireName);
+        final outboxRows = await db.select(db.syncOutbox).get();
+        expect(outboxRows.single.operationType, 'updateProduct');
+        expect(outboxRows.single.expectedServerVersion, 3);
+      },
+    );
 
-    test('server_version conflict (STALE_VERSION) kaydı korur, çakışma işaretler', () async {
-      final product = await seedProduct('product-1');
-      final api = _FakeProductApi([
-        () => const SyncPushResult(
-          type: SyncResultType.conflict,
-          errorCode: 'STALE_VERSION',
-        ),
-      ]);
-      final engine = buildEngine(api);
-      final repo = buildRepo(engine);
-      await repo.updateProduct(product.copyWith(name: 'Güncel Şampuan'));
+    test(
+      'server_version conflict (STALE_VERSION) kaydı korur, çakışma işaretler',
+      () async {
+        final product = await seedProduct('product-1');
+        final api = _FakeProductApi([
+          () => const SyncPushResult(
+            type: SyncResultType.conflict,
+            errorCode: 'STALE_VERSION',
+          ),
+        ]);
+        final engine = buildEngine(api);
+        final repo = buildRepo(engine);
+        await repo.updateProduct(product.copyWith(name: 'Güncel Şampuan'));
 
-      final summary = await engine.push();
+        final summary = await engine.push();
 
-      expect(summary.failed, 1);
-      final row = await local.findProductRow('product-1');
-      expect(row?.syncStatus, SyncStatus.conflicted.wireName);
-      expect(row?.lastSyncError, 'STALE_VERSION');
-      expect(row?.name, 'Güncel Şampuan');
-    });
+        expect(summary.failed, 1);
+        final row = await local.findProductRow('product-1');
+        expect(row?.syncStatus, SyncStatus.conflicted.wireName);
+        expect(row?.lastSyncError, 'STALE_VERSION');
+        expect(row?.name, 'Güncel Şampuan');
+      },
+    );
 
     test('offline aktif/pasif değişimi yerelde pending yazar', () async {
       await seedProduct('product-1');
@@ -381,10 +393,7 @@ void main() {
         buildEngine(api, sessionProblem: SyncResultType.authRequired),
       );
 
-      final updated = await repo.setProductActive(
-        'product-1',
-        isActive: false,
-      );
+      final updated = await repo.setProductActive('product-1', isActive: false);
 
       expect(updated.isActive, isFalse);
       final row = await local.findProductRow('product-1');

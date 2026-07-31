@@ -599,26 +599,23 @@ void main() {
       },
     );
 
-    test(
-      'internet gelince update push müşteriyi synced yapar',
-      () async {
-        await seedCustomer('customer-1');
-        final api = _FakeCustomerApi([_applied]);
-        final engine = buildEngine(api);
-        final repo = buildRepo(engine);
+    test('internet gelince update push müşteriyi synced yapar', () async {
+      await seedCustomer('customer-1');
+      final api = _FakeCustomerApi([_applied]);
+      final engine = buildEngine(api);
+      final repo = buildRepo(engine);
 
-        await repo.updateCustomer(
-          _customer(id: 'customer-1', businessId: 'biz-1', name: 'Ali Güncel'),
-          actorUserId: 'user-1',
-        );
-        final summary = await engine.push();
+      await repo.updateCustomer(
+        _customer(id: 'customer-1', businessId: 'biz-1', name: 'Ali Güncel'),
+        actorUserId: 'user-1',
+      );
+      final summary = await engine.push();
 
-        expect(summary.pushed, 1);
-        final customer = (await db.select(db.localCustomers).get()).single;
-        expect(customer.syncStatus, SyncStatus.synced.wireName);
-        expect(customer.name, 'Ali Güncel');
-      },
-    );
+      expect(summary.pushed, 1);
+      final customer = (await db.select(db.localCustomers).get()).single;
+      expect(customer.syncStatus, SyncStatus.synced.wireName);
+      expect(customer.name, 'Ali Güncel');
+    });
 
     test(
       'sync başarısızlığı (offline) çağıranı düşürmez, kayıt korunur',
@@ -639,30 +636,33 @@ void main() {
       },
     );
 
-    test('server_version conflict (STALE_VERSION) kaydı korur, çakışma işaretler', () async {
-      await seedCustomer('customer-1');
-      final api = _FakeCustomerApi([
-        () => const SyncPushResult(
-          type: SyncResultType.conflict,
-          errorCode: 'STALE_VERSION',
-        ),
-      ]);
-      final engine = buildEngine(api);
-      final repo = buildRepo(engine);
-      await repo.updateCustomer(
-        _customer(id: 'customer-1', businessId: 'biz-1', name: 'Ali Güncel'),
-        actorUserId: 'user-1',
-      );
+    test(
+      'server_version conflict (STALE_VERSION) kaydı korur, çakışma işaretler',
+      () async {
+        await seedCustomer('customer-1');
+        final api = _FakeCustomerApi([
+          () => const SyncPushResult(
+            type: SyncResultType.conflict,
+            errorCode: 'STALE_VERSION',
+          ),
+        ]);
+        final engine = buildEngine(api);
+        final repo = buildRepo(engine);
+        await repo.updateCustomer(
+          _customer(id: 'customer-1', businessId: 'biz-1', name: 'Ali Güncel'),
+          actorUserId: 'user-1',
+        );
 
-      final summary = await engine.push();
+        final summary = await engine.push();
 
-      expect(summary.failed, 1);
-      final customer = (await db.select(db.localCustomers).get()).single;
-      expect(customer.syncStatus, SyncStatus.conflicted.wireName);
-      expect(customer.lastSyncError, 'STALE_VERSION');
-      // Yerel isim değişikliği korunur; kayıt silinmedi.
-      expect(customer.name, 'Ali Güncel');
-    });
+        expect(summary.failed, 1);
+        final customer = (await db.select(db.localCustomers).get()).single;
+        expect(customer.syncStatus, SyncStatus.conflicted.wireName);
+        expect(customer.lastSyncError, 'STALE_VERSION');
+        // Yerel isim değişikliği korunur; kayıt silinmedi.
+        expect(customer.name, 'Ali Güncel');
+      },
+    );
 
     test(
       'offline aktif/pasif değişimi yerelde pending yazar ve outbox oluşturur',

@@ -20,8 +20,7 @@ class LocalServices extends Table {
   /// Offline-first yazma yolu (Bölüm 8, müşteri deseniyle birebir aynı):
   /// local_only, pending, processing, retrying, synced, conflicted, rejected.
   /// Sunucudan gelen read-through kayıtlar `synced` ile yazılır.
-  TextColumn get syncStatus =>
-      text().withDefault(const Constant('synced'))();
+  TextColumn get syncStatus => text().withDefault(const Constant('synced'))();
   IntColumn get serverVersion => integer().nullable()();
   BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
   DateTimeColumn get deletedAt => dateTime().nullable()();

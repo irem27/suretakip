@@ -26,7 +26,8 @@ import 'package:suretakip/features/sessions/data/repositories/offline_sessions_r
 
 // appDatabaseProvider artık app_providers.dart'ta tanımlı (offline önbellek de
 // aynı Drift örneğini paylaşıyor); geriye dönük import uyumu için re-export.
-export 'package:suretakip/app/providers/app_providers.dart' show appDatabaseProvider;
+export 'package:suretakip/app/providers/app_providers.dart'
+    show appDatabaseProvider;
 
 final customersLocalDataSourceProvider = Provider<CustomersLocalDataSource>(
   (ref) => CustomersLocalDataSource(ref.watch(appDatabaseProvider)),

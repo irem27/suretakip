@@ -168,14 +168,11 @@ class ServicesLocalDataSource {
     _db.localServices,
   )..where((t) => t.id.equals(id))).getSingleOrNull();
 
-  Future<void> upsertService(Service service) => _db
-      .into(_db.localServices)
-      .insertOnConflictUpdate(_toCompanion(service));
+  Future<void> upsertService(Service service) =>
+      _db.into(_db.localServices).insertOnConflictUpdate(_toCompanion(service));
 
   /// Domain kaydı ve outbox kaydını TEK transaction'da yazar (Bölüm 6).
-  Future<LocalServiceRow> enqueueCreateService(
-    EnqueueCreateService command,
-  ) {
+  Future<LocalServiceRow> enqueueCreateService(EnqueueCreateService command) {
     return _db.transaction(() async {
       final service = LocalServicesCompanion.insert(
         id: command.serviceId,
@@ -212,10 +209,7 @@ class ServicesLocalDataSource {
               aggregateType: 'service',
               aggregateId: command.serviceId,
               operationType: SyncOperationType.createService.wireName,
-              sequenceNumber: await _nextSequence(
-                'service',
-                command.serviceId,
-              ),
+              sequenceNumber: await _nextSequence('service', command.serviceId),
               payloadJson: jsonEncode(payload),
               payloadVersion: Value(command.payloadVersion),
               idempotencyKey: command.idempotencyKey,
@@ -235,9 +229,7 @@ class ServicesLocalDataSource {
   /// Var olan hizmeti ve outbox kaydını TEK transaction'da yazar
   /// (`enqueueCreateService` ile aynı desen). `server_version`, optimistic
   /// concurrency için yerel satırdan `expected_version` olarak okunur.
-  Future<LocalServiceRow> enqueueUpdateService(
-    EnqueueUpdateService command,
-  ) {
+  Future<LocalServiceRow> enqueueUpdateService(EnqueueUpdateService command) {
     return _db.transaction(() async {
       await (_db.update(
         _db.localServices,
@@ -272,10 +264,7 @@ class ServicesLocalDataSource {
               aggregateType: 'service',
               aggregateId: command.serviceId,
               operationType: SyncOperationType.updateService.wireName,
-              sequenceNumber: await _nextSequence(
-                'service',
-                command.serviceId,
-              ),
+              sequenceNumber: await _nextSequence('service', command.serviceId),
               payloadJson: jsonEncode(payload),
               payloadVersion: Value(command.payloadVersion),
               idempotencyKey: command.idempotencyKey,
@@ -326,10 +315,7 @@ class ServicesLocalDataSource {
               aggregateType: 'service',
               aggregateId: command.serviceId,
               operationType: SyncOperationType.setServiceActive.wireName,
-              sequenceNumber: await _nextSequence(
-                'service',
-                command.serviceId,
-              ),
+              sequenceNumber: await _nextSequence('service', command.serviceId),
               payloadJson: jsonEncode(payload),
               payloadVersion: Value(command.payloadVersion),
               idempotencyKey: command.idempotencyKey,
@@ -359,20 +345,21 @@ class ServicesLocalDataSource {
     return (current ?? 0) + 1;
   }
 
-  LocalServicesCompanion _toCompanion(Service s) => LocalServicesCompanion.insert(
-    id: s.id,
-    businessId: s.businessId,
-    name: s.name,
-    pricePerMinuteMinor: s.pricePerMinuteMinor,
-    roundingIntervalMinutes: s.roundingIntervalMinutes,
-    minimumChargeMinutes: s.minimumChargeMinutes,
-    currencyCode: s.currencyCode,
-    isActive: Value(s.isActive),
-    archivedAt: Value(s.archivedAt),
-    createdAt: s.createdAt,
-    updatedAt: s.updatedAt,
-    syncStatus: const Value('synced'),
-  );
+  LocalServicesCompanion _toCompanion(Service s) =>
+      LocalServicesCompanion.insert(
+        id: s.id,
+        businessId: s.businessId,
+        name: s.name,
+        pricePerMinuteMinor: s.pricePerMinuteMinor,
+        roundingIntervalMinutes: s.roundingIntervalMinutes,
+        minimumChargeMinutes: s.minimumChargeMinutes,
+        currencyCode: s.currencyCode,
+        isActive: Value(s.isActive),
+        archivedAt: Value(s.archivedAt),
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
+        syncStatus: const Value('synced'),
+      );
 
   Service _fromRow(LocalServiceRow row) => Service(
     id: row.id,

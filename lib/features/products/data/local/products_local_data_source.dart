@@ -173,17 +173,14 @@ class ProductsLocalDataSource {
     _db.localProducts,
   )..where((t) => t.id.equals(id))).getSingleOrNull();
 
-  Future<void> upsertProduct(Product product) => _db
-      .into(_db.localProducts)
-      .insertOnConflictUpdate(_toCompanion(product));
+  Future<void> upsertProduct(Product product) =>
+      _db.into(_db.localProducts).insertOnConflictUpdate(_toCompanion(product));
 
   /// Domain kaydı ve outbox kaydını TEK transaction'da yazar (Bölüm 6).
   /// Stok her zaman 0 ile açılır; ilk stok varsa sunucu tarafında
   /// `inventory_movements` ledger kaydı olarak eklenir — cache asla doğrudan
   /// yazılmaz (bkz. dosya başındaki not).
-  Future<LocalProductRow> enqueueCreateProduct(
-    EnqueueCreateProduct command,
-  ) {
+  Future<LocalProductRow> enqueueCreateProduct(EnqueueCreateProduct command) {
     return _db.transaction(() async {
       final product = LocalProductsCompanion.insert(
         id: command.productId,
@@ -224,10 +221,7 @@ class ProductsLocalDataSource {
               aggregateType: 'product',
               aggregateId: command.productId,
               operationType: SyncOperationType.createProduct.wireName,
-              sequenceNumber: await _nextSequence(
-                'product',
-                command.productId,
-              ),
+              sequenceNumber: await _nextSequence('product', command.productId),
               payloadJson: jsonEncode(payload),
               payloadVersion: Value(command.payloadVersion),
               idempotencyKey: command.idempotencyKey,
@@ -247,9 +241,7 @@ class ProductsLocalDataSource {
   /// Var olan ürünü ve outbox kaydını TEK transaction'da yazar
   /// (`enqueueCreateProduct` ile aynı desen). `server_version`, optimistic
   /// concurrency için yerel satırdan `expected_version` olarak okunur.
-  Future<LocalProductRow> enqueueUpdateProduct(
-    EnqueueUpdateProduct command,
-  ) {
+  Future<LocalProductRow> enqueueUpdateProduct(EnqueueUpdateProduct command) {
     return _db.transaction(() async {
       await (_db.update(
         _db.localProducts,
@@ -284,10 +276,7 @@ class ProductsLocalDataSource {
               aggregateType: 'product',
               aggregateId: command.productId,
               operationType: SyncOperationType.updateProduct.wireName,
-              sequenceNumber: await _nextSequence(
-                'product',
-                command.productId,
-              ),
+              sequenceNumber: await _nextSequence('product', command.productId),
               payloadJson: jsonEncode(payload),
               payloadVersion: Value(command.payloadVersion),
               idempotencyKey: command.idempotencyKey,
@@ -338,10 +327,7 @@ class ProductsLocalDataSource {
               aggregateType: 'product',
               aggregateId: command.productId,
               operationType: SyncOperationType.setProductActive.wireName,
-              sequenceNumber: await _nextSequence(
-                'product',
-                command.productId,
-              ),
+              sequenceNumber: await _nextSequence('product', command.productId),
               payloadJson: jsonEncode(payload),
               payloadVersion: Value(command.payloadVersion),
               idempotencyKey: command.idempotencyKey,
@@ -371,21 +357,22 @@ class ProductsLocalDataSource {
     return (current ?? 0) + 1;
   }
 
-  LocalProductsCompanion _toCompanion(Product p) => LocalProductsCompanion.insert(
-    id: p.id,
-    businessId: p.businessId,
-    name: p.name,
-    sku: Value(p.sku),
-    unitPriceMinor: p.unitPriceMinor,
-    currencyCode: p.currencyCode,
-    trackStock: Value(p.trackStock),
-    stockQuantity: Value(p.stockQuantity),
-    isActive: Value(p.isActive),
-    archivedAt: Value(p.archivedAt),
-    createdAt: p.createdAt,
-    updatedAt: p.updatedAt,
-    syncStatus: const Value('synced'),
-  );
+  LocalProductsCompanion _toCompanion(Product p) =>
+      LocalProductsCompanion.insert(
+        id: p.id,
+        businessId: p.businessId,
+        name: p.name,
+        sku: Value(p.sku),
+        unitPriceMinor: p.unitPriceMinor,
+        currencyCode: p.currencyCode,
+        trackStock: Value(p.trackStock),
+        stockQuantity: Value(p.stockQuantity),
+        isActive: Value(p.isActive),
+        archivedAt: Value(p.archivedAt),
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+        syncStatus: const Value('synced'),
+      );
 
   Product _fromRow(LocalProductRow row) => Product(
     id: row.id,

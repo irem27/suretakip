@@ -5,23 +5,19 @@ import 'package:suretakip/features/sessions/data/repositories/sessions_repositor
 import 'package:suretakip/features/sessions/domain/entities/session_history_filter.dart';
 
 void main() {
-  test(
-    'zorunlu bir alan null geldiğinde ham TypeError yerine '
-    'DatabaseException fırlatır',
-    () async {
-      final malformedRow = Map<String, dynamic>.from(_sessionRow)
-        ..['service_name_snapshot'] = null;
-      final dataSource = _FakeSessionsDataSource()
-        ..sessionRowOverride = malformedRow;
-      final repository = SessionsRepositoryImpl(dataSource);
+  test('zorunlu bir alan null geldiğinde ham TypeError yerine '
+      'DatabaseException fırlatır', () async {
+    final malformedRow = Map<String, dynamic>.from(_sessionRow)
+      ..['service_name_snapshot'] = null;
+    final dataSource = _FakeSessionsDataSource()
+      ..sessionRowOverride = malformedRow;
+    final repository = SessionsRepositoryImpl(dataSource);
 
-      expect(
-        () => repository.getSessions(businessId: 'business-1'),
-        throwsA(isA<DatabaseException>()),
-      );
-    },
-  );
-
+    expect(
+      () => repository.getSessions(businessId: 'business-1'),
+      throwsA(isA<DatabaseException>()),
+    );
+  });
 
   test('seans satırını snapshot alanlarıyla domain modeline eşler', () async {
     final repository = SessionsRepositoryImpl(_FakeSessionsDataSource());

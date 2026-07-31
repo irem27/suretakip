@@ -24,7 +24,10 @@ class AuthRemoteDataSource {
   }
 
   Future<void> signUp({required String email, required String password}) async {
-    final response = await _client.auth.signUp(email: email, password: password);
+    final response = await _client.auth.signUp(
+      email: email,
+      password: password,
+    );
     // Supabase, e-posta zaten kayıtlıysa (anti-enumeration) hata vermez; sahte
     // bir kullanıcı döndürür ve `identities` boş gelir. Bunu açık bir hataya
     // çeviririz ki kullanıcı "zaten kayıtlı" uyarısını görsün (repository

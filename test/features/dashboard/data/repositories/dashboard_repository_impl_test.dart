@@ -34,10 +34,7 @@ void main() {
       _FakeDashboardDataSource(invalidNumeric: true),
     );
 
-    expect(
-      repository.getMetrics(businessId: 'business-1'),
-      throwsA(anything),
-    );
+    expect(repository.getMetrics(businessId: 'business-1'), throwsA(anything));
   });
 }
 

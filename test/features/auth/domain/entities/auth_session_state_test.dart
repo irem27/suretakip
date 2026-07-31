@@ -25,8 +25,10 @@ void main() {
     test('instances with different isPasswordRecovery are not equal', () {
       // Arrange
       const first = AuthSessionState(userId: 'user-1');
-      const second =
-          AuthSessionState(userId: 'user-1', isPasswordRecovery: true);
+      const second = AuthSessionState(
+        userId: 'user-1',
+        isPasswordRecovery: true,
+      );
 
       // Act & Assert
       expect(first, isNot(equals(second)));

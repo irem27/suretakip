@@ -191,12 +191,13 @@ class _UnusedServicesRemoteRepository implements ServicesRepository {
       throw UnimplementedError();
 
   @override
-  Future<Service> updateService(Service service) =>
-      throw UnimplementedError();
+  Future<Service> updateService(Service service) => throw UnimplementedError();
 
   @override
-  Future<Service> setServiceActive(String serviceId, {required bool isActive}) =>
-      throw UnimplementedError();
+  Future<Service> setServiceActive(
+    String serviceId, {
+    required bool isActive,
+  }) => throw UnimplementedError();
 }
 
 SyncPushResult _applied() => SyncPushResult(
@@ -285,16 +286,21 @@ void main() {
     expect(row?.serverVersion, 1);
   });
 
-  test('sync başarısızlığı (offline) çağıranı düşürmez, kayıt korunur', () async {
-    final api = _FakeServiceApi([() => throw const SocketException('offline')]);
-    final repo = buildRepo(buildEngine(api));
+  test(
+    'sync başarısızlığı (offline) çağıranı düşürmez, kayıt korunur',
+    () async {
+      final api = _FakeServiceApi([
+        () => throw const SocketException('offline'),
+      ]);
+      final repo = buildRepo(buildEngine(api));
 
-    final service = await repo.createService(_input);
+      final service = await repo.createService(_input);
 
-    final row = await local.findServiceRow(service.id);
-    expect(row?.syncStatus, SyncStatus.pending.wireName);
-    expect(service.name, 'Yıkama');
-  });
+      final row = await local.findServiceRow(service.id);
+      expect(row?.syncStatus, SyncStatus.pending.wireName);
+      expect(service.name, 'Yıkama');
+    },
+  );
 
   group('offline update ve setActive', () {
     Future<Service> seedService(String id, {int serverVersion = 3}) async {
@@ -318,45 +324,51 @@ void main() {
       return (await local.getService(id))!;
     }
 
-    test('offline güncelleme yerelde pending yazar ve outbox oluşturur', () async {
-      final service = await seedService('service-1');
-      final api = _FakeServiceApi([_applied]);
-      final repo = buildRepo(
-        buildEngine(api, sessionProblem: SyncResultType.authRequired),
-      );
+    test(
+      'offline güncelleme yerelde pending yazar ve outbox oluşturur',
+      () async {
+        final service = await seedService('service-1');
+        final api = _FakeServiceApi([_applied]);
+        final repo = buildRepo(
+          buildEngine(api, sessionProblem: SyncResultType.authRequired),
+        );
 
-      final updated = await repo.updateService(
-        service.copyWith(name: 'Güncel Yıkama'),
-      );
+        final updated = await repo.updateService(
+          service.copyWith(name: 'Güncel Yıkama'),
+        );
 
-      expect(updated.name, 'Güncel Yıkama');
-      final row = await local.findServiceRow('service-1');
-      expect(row?.syncStatus, SyncStatus.pending.wireName);
-      final outboxRows = await db.select(db.syncOutbox).get();
-      expect(outboxRows.single.operationType, 'updateService');
-      expect(outboxRows.single.expectedServerVersion, 3);
-    });
+        expect(updated.name, 'Güncel Yıkama');
+        final row = await local.findServiceRow('service-1');
+        expect(row?.syncStatus, SyncStatus.pending.wireName);
+        final outboxRows = await db.select(db.syncOutbox).get();
+        expect(outboxRows.single.operationType, 'updateService');
+        expect(outboxRows.single.expectedServerVersion, 3);
+      },
+    );
 
-    test('server_version conflict (STALE_VERSION) kaydı korur, çakışma işaretler', () async {
-      final service = await seedService('service-1');
-      final api = _FakeServiceApi([
-        () => const SyncPushResult(
-          type: SyncResultType.conflict,
-          errorCode: 'STALE_VERSION',
-        ),
-      ]);
-      final engine = buildEngine(api);
-      final repo = buildRepo(engine);
-      await repo.updateService(service.copyWith(name: 'Güncel Yıkama'));
+    test(
+      'server_version conflict (STALE_VERSION) kaydı korur, çakışma işaretler',
+      () async {
+        final service = await seedService('service-1');
+        final api = _FakeServiceApi([
+          () => const SyncPushResult(
+            type: SyncResultType.conflict,
+            errorCode: 'STALE_VERSION',
+          ),
+        ]);
+        final engine = buildEngine(api);
+        final repo = buildRepo(engine);
+        await repo.updateService(service.copyWith(name: 'Güncel Yıkama'));
 
-      final summary = await engine.push();
+        final summary = await engine.push();
 
-      expect(summary.failed, 1);
-      final row = await local.findServiceRow('service-1');
-      expect(row?.syncStatus, SyncStatus.conflicted.wireName);
-      expect(row?.lastSyncError, 'STALE_VERSION');
-      expect(row?.name, 'Güncel Yıkama');
-    });
+        expect(summary.failed, 1);
+        final row = await local.findServiceRow('service-1');
+        expect(row?.syncStatus, SyncStatus.conflicted.wireName);
+        expect(row?.lastSyncError, 'STALE_VERSION');
+        expect(row?.name, 'Güncel Yıkama');
+      },
+    );
 
     test('offline aktif/pasif değişimi yerelde pending yazar', () async {
       await seedService('service-1');
@@ -365,10 +377,7 @@ void main() {
         buildEngine(api, sessionProblem: SyncResultType.authRequired),
       );
 
-      final updated = await repo.setServiceActive(
-        'service-1',
-        isActive: false,
-      );
+      final updated = await repo.setServiceActive('service-1', isActive: false);
 
       expect(updated.isActive, isFalse);
       final row = await local.findServiceRow('service-1');

@@ -36,19 +36,16 @@ void main() {
     },
   );
 
-  test(
-    'updateCustomer, müşterinin bilinen updatedAt değerini iyimser '
-    'eşzamanlılık denetimi olarak veri kaynağına iletir',
-    () async {
-      final dataSource = _FakeCustomersDataSource();
-      final repository = CustomersRepositoryImpl(dataSource);
-      final customer = _customer();
+  test('updateCustomer, müşterinin bilinen updatedAt değerini iyimser '
+      'eşzamanlılık denetimi olarak veri kaynağına iletir', () async {
+    final dataSource = _FakeCustomersDataSource();
+    final repository = CustomersRepositoryImpl(dataSource);
+    final customer = _customer();
 
-      await repository.updateCustomer(customer);
+    await repository.updateCustomer(customer);
 
-      expect(dataSource.capturedExpectedUpdatedAt, customer.updatedAt);
-    },
-  );
+    expect(dataSource.capturedExpectedUpdatedAt, customer.updatedAt);
+  });
 
   test(
     'updateCustomer, kayıt başka bir yerden değiştirildiyse (eşleşen satır '
@@ -64,23 +61,20 @@ void main() {
     },
   );
 
-  test(
-    'setCustomerActive, expectedUpdatedAt verildiğinde ve kayıt bu sırada '
-    'değiştiyse ConflictException fırlatır',
-    () async {
-      final dataSource = _FakeCustomersDataSource()..throwStaleConflict = true;
-      final repository = CustomersRepositoryImpl(dataSource);
+  test('setCustomerActive, expectedUpdatedAt verildiğinde ve kayıt bu sırada '
+      'değiştiyse ConflictException fırlatır', () async {
+    final dataSource = _FakeCustomersDataSource()..throwStaleConflict = true;
+    final repository = CustomersRepositoryImpl(dataSource);
 
-      await expectLater(
-        repository.setCustomerActive(
-          'customer-1',
-          isActive: false,
-          expectedUpdatedAt: DateTime.parse('2026-01-01T00:00:00Z'),
-        ),
-        throwsA(isA<ConflictException>()),
-      );
-    },
-  );
+    await expectLater(
+      repository.setCustomerActive(
+        'customer-1',
+        isActive: false,
+        expectedUpdatedAt: DateTime.parse('2026-01-01T00:00:00Z'),
+      ),
+      throwsA(isA<ConflictException>()),
+    );
+  });
 
   test(
     'setCustomerActive, expectedUpdatedAt verilmediğinde eşleşen satır yok '

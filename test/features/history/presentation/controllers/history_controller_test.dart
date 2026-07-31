@@ -86,7 +86,9 @@ void main() {
           servicesRepositoryProvider.overrideWithValue(
             _FakeServicesRepository(),
           ),
-          paymentsRepositoryProvider.overrideWithValue(_FakePaymentsRepository()),
+          paymentsRepositoryProvider.overrideWithValue(
+            _FakePaymentsRepository(),
+          ),
         ],
       );
       addTearDown(container.dispose);
@@ -129,9 +131,7 @@ void main() {
         customersRepositoryProvider.overrideWithValue(
           _FakeCustomersRepository(),
         ),
-        servicesRepositoryProvider.overrideWithValue(
-          _FakeServicesRepository(),
-        ),
+        servicesRepositoryProvider.overrideWithValue(_FakeServicesRepository()),
         paymentsRepositoryProvider.overrideWithValue(_FakePaymentsRepository()),
       ],
     );
@@ -143,7 +143,10 @@ void main() {
     await container.read(provider.future);
     final notifier = container.read(provider.notifier);
 
-    await expectLater(notifier.refresh(), throwsA(isA<AuthenticationException>()));
+    await expectLater(
+      notifier.refresh(),
+      throwsA(isA<AuthenticationException>()),
+    );
 
     final state = container.read(provider);
     expect(state.hasError, isTrue);

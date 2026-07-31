@@ -124,10 +124,8 @@ class CachedBusinessesRepository implements BusinessesRepository {
   Future<void> transferOwnership({
     required String businessId,
     required String toMemberId,
-  }) => _remote.transferOwnership(
-    businessId: businessId,
-    toMemberId: toMemberId,
-  );
+  }) =>
+      _remote.transferOwnership(businessId: businessId, toMemberId: toMemberId);
 
   Future<void> _refreshBusinesses() async {
     try {

@@ -93,7 +93,10 @@ class DashboardController
       // gerçek veri gibi bırakmayız. Hatayı yüzeye çıkar (UI "yeniden dene"
       // kartı gösterir) ama önceki yerel değeri koru (copyWithPrevious) ki
       // ekran çökmesin.
-      state = AsyncError<DashboardMetrics?>(error, stack).copyWithPrevious(state);
+      state = AsyncError<DashboardMetrics?>(
+        error,
+        stack,
+      ).copyWithPrevious(state);
     } catch (error, stack) {
       if (!_isDisposed && arg.businessId == businessId) {
         state = AsyncError<DashboardMetrics?>(

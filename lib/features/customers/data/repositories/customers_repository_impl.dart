@@ -72,16 +72,13 @@ class CustomersRepositoryImpl implements CustomersRepository {
   }) => _guard(() async {
     try {
       return _fromJson(
-        await _dataSource.updateCustomer(
-          {
-            'id': customerId,
-            'is_active': isActive,
-            'archived_at': isActive
-                ? null
-                : DateTime.now().toUtc().toIso8601String(),
-          },
-          expectedUpdatedAt: expectedUpdatedAt,
-        ),
+        await _dataSource.updateCustomer({
+          'id': customerId,
+          'is_active': isActive,
+          'archived_at': isActive
+              ? null
+              : DateTime.now().toUtc().toIso8601String(),
+        }, expectedUpdatedAt: expectedUpdatedAt),
       );
     } on PostgrestException catch (error) {
       throw _asConflictIfStale(

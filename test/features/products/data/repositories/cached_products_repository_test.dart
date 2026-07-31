@@ -21,10 +21,7 @@ void main() {
     db = AppDatabase.forExecutor(NativeDatabase.memory());
     remote = _FakeRemote();
     local = ProductsLocalDataSource(db);
-    repo = CachedProductsRepository(
-      remote: remote,
-      local: local,
-    );
+    repo = CachedProductsRepository(remote: remote, local: local);
   });
 
   tearDown(() => db.close());
@@ -47,7 +44,10 @@ void main() {
   test('önbellek boşken ağ hatasında getProducts hatayı yükseltir', () async {
     // Boş önbellek + çevrimdışı: boş liste "ürün yok" gibi maskelenmemeli.
     remote.throwNetwork = true;
-    expect(repo.getProducts(businessId: 'b1'), throwsA(isA<NetworkException>()));
+    expect(
+      repo.getProducts(businessId: 'b1'),
+      throwsA(isA<NetworkException>()),
+    );
   });
 
   test('önbellek varsa ürünleri uzak yanıtı beklemeden döndürür', () async {
@@ -102,14 +102,17 @@ class _FakeRemote implements ProductsRepository {
   }
 
   @override
-  Future<Product> createProduct(ProductInput input) => throw UnimplementedError();
+  Future<Product> createProduct(ProductInput input) =>
+      throw UnimplementedError();
 
   @override
   Future<Product> updateProduct(Product product) => throw UnimplementedError();
 
   @override
-  Future<Product> setProductActive(String productId, {required bool isActive}) =>
-      throw UnimplementedError();
+  Future<Product> setProductActive(
+    String productId, {
+    required bool isActive,
+  }) => throw UnimplementedError();
 
   @override
   Future<List<InventoryMovement>> getInventoryMovements({
@@ -118,6 +121,7 @@ class _FakeRemote implements ProductsRepository {
   }) => throw UnimplementedError();
 
   @override
-  Future<InventoryMovement> createInventoryMovement(InventoryMovement movement) =>
-      throw UnimplementedError();
+  Future<InventoryMovement> createInventoryMovement(
+    InventoryMovement movement,
+  ) => throw UnimplementedError();
 }

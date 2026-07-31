@@ -77,9 +77,9 @@ void main() {
     await local.replaceBusinesses([_business('cached')]);
     remote.businessesCompleter = Completer<List<Business>>();
 
-    final result = await repo
-        .getBusinesses()
-        .timeout(const Duration(milliseconds: 100));
+    final result = await repo.getBusinesses().timeout(
+      const Duration(milliseconds: 100),
+    );
 
     expect(result.single.id, 'cached');
     remote.businessesCompleter!.complete([_business('fresh')]);

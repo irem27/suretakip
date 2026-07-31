@@ -98,9 +98,7 @@ class OfflinePaymentsRepository implements PaymentsRepository {
       _remote.refundPayment(input);
 
   @override
-  Future<PaymentMutationResult> recordSessionPayment(
-    PaymentInput input,
-  ) async {
+  Future<PaymentMutationResult> recordSessionPayment(PaymentInput input) async {
     try {
       return await _remote.recordSessionPayment(input);
     } on NetworkException {

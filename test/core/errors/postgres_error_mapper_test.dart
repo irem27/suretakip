@@ -94,4 +94,78 @@ void main() {
     expect(exception.cause.toString(), isNot(contains('+905551112233')));
     expect(exception.cause.toString(), 'Veritabanı hata ayrıntısı maskelendi.');
   });
+
+  group('PostgresErrorMapper.map — ek RPC anahtarları', () {
+    test('doğrulama hataları ValidationException', () {
+      for (final key in [
+        'business_name_required',
+        'invalid_amount',
+        'payment_reason_required',
+        'user_id_required',
+        'cannot_transfer_to_self',
+      ]) {
+        expect(
+          PostgresErrorMapper.map(message: key),
+          isA<ValidationException>(),
+          reason: key,
+        );
+      }
+    });
+
+    test('çakışma hataları ConflictException', () {
+      for (final key in [
+        'session_not_payable',
+        'refund_exceeds_refundable',
+        'last_owner_protected',
+        'member_already_exists',
+        'session_already_cancelled',
+      ]) {
+        expect(
+          PostgresErrorMapper.map(message: key),
+          isA<ConflictException>(),
+          reason: key,
+        );
+      }
+    });
+
+    test('bulunamadı hataları NotFoundException', () {
+      for (final key in [
+        'payment_not_found',
+        'member_not_found',
+        'user_not_found',
+        'service_not_available',
+      ]) {
+        expect(
+          PostgresErrorMapper.map(message: key),
+          isA<NotFoundException>(),
+          reason: key,
+        );
+      }
+    });
+
+    test('stok doğrudan yazma denemesi AuthorizationException', () {
+      expect(
+        PostgresErrorMapper.map(message: 'stock_quantity_direct_write_denied'),
+        isA<AuthorizationException>(),
+      );
+    });
+
+    test('anahtar kelime ortasında geçerse iş-hatasına eşlenmez', () {
+      // 'not_a_member' harf komşularıyla çevrili → token sınırı yok, döngü
+      // taramayı sürdürüp eşleşme bulmamalı (_containsToken/_isWordChar).
+      final mapped = PostgresErrorMapper.map(
+        message: 'xnot_a_memberx bir hata detayı not_a_membery',
+        code: '99999',
+      );
+      expect(mapped, isA<DatabaseException>());
+    });
+
+    test('anahtar tekrar geçtiğinde ikinci konumda sınır bulur', () {
+      // İlk geçiş kelime-parçası (eşleşmez), ikinci geçiş token-sınırlı.
+      final mapped = PostgresErrorMapper.map(
+        message: 'prefixnot_authorized ve ardından not_authorized',
+      );
+      expect(mapped, isA<AuthorizationException>());
+    });
+  });
 }

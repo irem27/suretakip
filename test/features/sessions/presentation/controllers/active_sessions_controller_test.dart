@@ -102,14 +102,16 @@ void main() {
       );
       addTearDown(summariesSub.close);
       // İlk build ürün kalemleri akışının ilk emisyonundan önce oluşabilir;
-      // kalemler akışı yayınlanınca provider kendini yeniden kurar. Kararlı
-      // (kalemli) sonucu almak için ikinci emisyonu bekliyoruz.
-      await container.read(activeSessionSummariesProvider.future);
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-
-      final summaries = await container.read(
+      // kalemler akışı yayınlanınca provider kendini yeniden kurar. Sabit
+      // gecikme yerine kalemli kararlı sonucu deterministik olarak yokla.
+      var summaries = await container.read(
         activeSessionSummariesProvider.future,
       );
+      for (var attempt = 0; attempt < 50; attempt++) {
+        if (summaries.isNotEmpty && summaries.single.items.isNotEmpty) break;
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        summaries = await container.read(activeSessionSummariesProvider.future);
+      }
 
       expect(summaries, hasLength(1));
       final summary = summaries.single;
